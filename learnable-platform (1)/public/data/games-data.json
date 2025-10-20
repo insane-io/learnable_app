@@ -1,0 +1,40 @@
+
+[
+  {
+    "id": "star-catcher",
+    "slug": "star-catcher",
+    "type": "star",
+    "title": "Star Catcher",
+    "durationSeconds": 60,
+    "description": "Click yellow and blue stars to score. Avoid red circles.",
+    "scoring": {
+      "yellow-star": 2,
+      "blue-star": 1,
+      "red-circle": 0
+    },
+    "category": "attention",
+    "difficulty": "easy",
+    "thumbnail": "/games/star-catcher/thumb.png",
+    "animal": "🐻",
+    "color": "bg-cyan-100",
+    "maxPlayers": 1
+  },
+  {
+    "id": "rhyme-riders",
+    "slug": "rhyme-riders",
+    "type": "rhyme",
+    "title": "Rhyme Riders",
+    "durationSeconds": 90,
+    "description": "Listen and choose the word that rhymes to the target word.",
+    "scoring": {
+      "correct": 1,
+      "incorrect": 0
+    },
+    "category": "phonics",
+    "difficulty": "medium",
+    "thumbnail": "/games/rhyme-riders/thumb.png",
+    "animal": "🦊",
+    "color": "bg-amber-100",
+    "maxPlayers": 1
+  }
+]

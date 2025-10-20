@@ -10,7 +10,8 @@ export default function UnifiedGamePage() {
   const [currentPhase, setCurrentPhase] = useState(1)
   const [questionCount, setQuestionCount] = useState(0)
   const [score, setScore] = useState(0)
-  const [gameState, setGameState] = useState<any>({})
+  type GameState = Record<string, any>
+  const [gameState, setGameState] = useState<GameState>({})
   const [feedback, setFeedback] = useState<string>("")
   const [showFeedback, setShowFeedback] = useState(false)
   const [questionsInCurrentPhase, setQuestionsInCurrentPhase] = useState(0)
@@ -20,25 +21,11 @@ export default function UnifiedGamePage() {
   >([])
   const [currentGameType, setCurrentGameType] = useState<string>("")
   const [lastGameType, setLastGameType] = useState<string>("")
+  const [gameTypes, setGameTypes] = useState<Array<any>>([])
 
   const router = useRouter()
 
-  const gameTypes = [
-    { type: "rhyme", animal: "🦊", title: "Rhyme Riders", color: "bg-amber-100" },
-    { type: "star", animal: "🐻", title: "Star Catcher", color: "bg-cyan-100" },
-    { type: "number-sequence", animal: "🚂", title: "Number Train", color: "bg-green-100" },
-    { type: "quantity-match", animal: "🍎", title: "Count & Match", color: "bg-red-100" },
-    { type: "math-puzzle", animal: "🧮", title: "Math Puzzle", color: "bg-yellow-100" },
-    { type: "letter-trace", animal: "✏️", title: "Letter Trace", color: "bg-purple-100" },
-    { type: "spelling-game", animal: "📝", title: "Spelling Game", color: "bg-indigo-100" },
-    { type: "sentence-build", animal: "🔤", title: "Sentence Builder", color: "bg-violet-100" },
-    { type: "sound-match", animal: "🎧", title: "Sound Match", color: "bg-blue-100" },
-    { type: "sequence-memory", animal: "🔊", title: "Memory Sequence", color: "bg-teal-100" },
-    { type: "story-recall", animal: "📚", title: "Story Recall", color: "bg-emerald-100" },
-    { type: "puzzle-complete", animal: "🧩", title: "Puzzle Master", color: "bg-pink-100" },
-    { type: "pattern-recognition", animal: "🔍", title: "Pattern Detective", color: "bg-rose-100" },
-    { type: "emotion-recognition", animal: "😊", title: "Emotion Detective", color: "bg-orange-100" },
-  ]
+  // gameTypes will be loaded from public/data/games-data.json
 
   const getNextGameType = () => {
     const availableGames = gameTypes.filter((game) => game.type !== lastGameType)
@@ -46,14 +33,26 @@ export default function UnifiedGamePage() {
     return randomGame.type
   }
 
-  const currentGame = gameTypes.find((game) => game.type === currentGameType) || gameTypes[0]
+  const currentGame = gameTypes.find((game) => game.type === currentGameType) || gameTypes[0] || { title: 'Loading…', animal: '🎮', color: 'bg-gray-100' }
 
   const questionsPerPhase = 8 // Fixed number of questions per phase
 
   useEffect(() => {
     if (!currentGameType) {
-      const firstGameType = getNextGameType()
-      setCurrentGameType(firstGameType)
+      // Load available games from manifest on first mount
+      fetch('/data/games-data.json', { cache: 'no-store' })
+        .then((r) => r.json())
+        .then((list) => {
+          // transform manifest into our internal gameTypes shape
+          const types = list.map((g: any) => ({ type: g.type ?? g.slug, animal: g.animal ?? '🎮', title: g.title, color: g.color ?? 'bg-gray-100' }))
+          setGameTypes(types)
+          const firstGameType = types.length ? types[0].type : ''
+          setCurrentGameType(firstGameType)
+        })
+        .catch(() => {
+          const firstGameType = getNextGameType()
+          setCurrentGameType(firstGameType)
+        })
     } else {
       initializeGame()
     }

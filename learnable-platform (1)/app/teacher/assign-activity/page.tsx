@@ -198,7 +198,7 @@ export default function AssignActivityPage() {
                     }`}
                     onClick={() => handleStudentSelect(student.id)}
                   >
-                    <Checkbox checked={selectedStudents.includes(student.id)} readOnly />
+                    <Checkbox checked={selectedStudents.includes(student.id)} />
                     <Avatar className="h-8 w-8">
                       <AvatarImage src={student.avatar || "/placeholder.svg"} alt={student.name} />
                       <AvatarFallback className="text-xs">
@@ -272,7 +272,7 @@ export default function AssignActivityPage() {
                     >
                       <CardContent className="p-4">
                         <div className="flex items-start gap-3">
-                          <Checkbox checked={isSelected} readOnly />
+                          <Checkbox checked={isSelected} />
                           <IconComponent className="h-6 w-6 text-primary mt-1" />
                           <div className="flex-1">
                             <h4 className="font-medium mb-1">{activity.title}</h4>

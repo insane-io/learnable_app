@@ -1,8 +1,9 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
+import { fetchGameData, saveProgressToLocal, exportJSON, GameProgress, postProgressToServer } from '@/lib/utils'
 
 interface Shape {
   id: number
@@ -21,6 +22,8 @@ export default function StarCatcherGame() {
   const [questionsAnswered, setQuestionsAnswered] = useState(0)
   const [shapes, setShapes] = useState<Shape[]>([])
   const [gameActive, setGameActive] = useState(true)
+  const [gameDef, setGameDef] = useState<any | null>(null)
+  const eventsRef = useRef<Array<any>>([])
 
   const generateShape = useCallback(() => {
     if (!gameActive) return
@@ -50,6 +53,19 @@ export default function StarCatcherGame() {
   }, [gameActive, phase])
 
   useEffect(() => {
+    // load game metadata from public JSON
+    fetchGameData()
+      .then((list) => {
+        const def = list.find((g) => g.slug === 'star-catcher')
+        if (def) {
+          setGameDef(def)
+          setTimeLeft(def.durationSeconds ?? 60)
+        }
+      })
+      .catch(() => {
+        // ignore — keep defaults
+      })
+
     if (!gameActive) return
 
     const timer = setInterval(() => {
@@ -80,7 +96,9 @@ export default function StarCatcherGame() {
 
     // Only yellow and blue stars give points
     if (shape.type === "yellow-star" || shape.type === "blue-star") {
-      setScore((prev) => prev + (shape.type === "yellow-star" ? 2 : 1))
+      const delta = shape.type === 'yellow-star' ? 2 : 1
+      setScore((prev) => prev + delta)
+      eventsRef.current.push({ type: 'click', shapeType: shape.type, scoreDelta: delta, atMs: Date.now() })
       setQuestionsAnswered((prev) => {
         const newCount = prev + 1
         // Phase change every 5 correct clicks
@@ -114,7 +132,34 @@ export default function StarCatcherGame() {
     setQuestionsAnswered(0)
     setShapes([])
     setGameActive(true)
+    eventsRef.current = []
   }
+
+  // when game stops, build progress object and save/export
+  useEffect(() => {
+    if (gameActive) return
+
+    const progress: GameProgress = {
+      gameId: gameDef?.id ?? 'star-catcher',
+      slug: gameDef?.slug ?? 'star-catcher',
+      timestamp: new Date().toISOString(),
+      durationSeconds: gameDef?.durationSeconds ?? 60,
+      timePlayedSeconds: (gameDef?.durationSeconds ?? 60) - timeLeft,
+      finalScore: score,
+      phaseReached: phase,
+      events: eventsRef.current,
+    }
+
+    // Save to localStorage under a per-game key
+    saveProgressToLocal(`progress:${progress.slug}:${progress.timestamp}`, progress)
+
+    // Also offer a download for QA / backend integration
+    // NOTE: in production you might send to server instead
+    // exportJSON(`${progress.slug}-progress-${Date.now()}.json`, progress)
+
+    // attach recent progress to ref for UI buttons
+    ;(window as any).__lastGameProgress = progress
+  }, [gameActive])
 
   return (
     <div className="min-h-screen bg-gray-900 relative overflow-hidden">
@@ -164,6 +209,32 @@ export default function StarCatcherGame() {
               </Button>
               <Button variant="outline" onClick={() => router.push("/child/games")} className="text-xl px-8 py-4">
                 Choose Game
+              </Button>
+            </div>
+            <div className="mt-6 flex gap-4 justify-center">
+              <Button
+                variant="ghost"
+                onClick={() => {
+                  const p = (window as any).__lastGameProgress
+                  if (p) exportJSON(`${p.slug}-progress-${Date.now()}.json`, p)
+                }}
+              >
+                Export Progress
+              </Button>
+              <Button
+                variant="outline"
+                onClick={async () => {
+                  const p = (window as any).__lastGameProgress
+                  if (!p) return
+                  try {
+                    await postProgressToServer('/api/progress', p)
+                    alert('Progress sent (stub)')
+                  } catch (e) {
+                    alert('Failed to send progress (see console)')
+                  }
+                }}
+              >
+                Send to Server (stub)
               </Button>
             </div>
           </div>
