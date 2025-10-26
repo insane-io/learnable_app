@@ -4,7 +4,7 @@ import pb from './pb'
  * Check if user is authenticated
  */
 export function isAuthenticated(): boolean {
-  return pb.authStore.isValid
+  return pb.authStore.isValid 
 }
 
 /**
