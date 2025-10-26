@@ -1,38 +1,93 @@
 
 [
   {
-    "id": "star-catcher",
-    "slug": "star-catcher",
-    "type": "star",
-    "title": "Star Catcher",
-    "durationSeconds": 60,
-    "description": "Click yellow and blue stars to score. Avoid red circles.",
-    "scoring": {
-      "yellow-star": 2,
-      "blue-star": 1,
-      "red-circle": 0
+    "id": "signal-sprinter",
+    "slug": "signal-sprinter",
+    "type": "cpt",
+    "title": "Signal Sprinter 🏃‍♂️",
+    "durationSeconds": 300,
+    "description": "Press spacebar when you see the green circle. Avoid pressing for red squares or blue triangles.",
+    "targetShape": "green-circle",
+    "distractorShapes": ["red-square", "blue-triangle"],
+    "shapeDuration": 250,
+    "parameters": {
+      "omission_errors": 0,
+      "commission_errors": 0,
+      "mean_reaction_time": 0,
+      "reaction_time_variability": 0
     },
-    "category": "attention",
-    "difficulty": "easy",
-    "thumbnail": "/games/star-catcher/thumb.png",
-    "animal": "🐻",
-    "color": "bg-cyan-100",
+    "category": "ADHD",
+    "difficulty": "medium",
+    "thumbnail": "/games/signal-sprinter/thumb.png",
+    "animal": "�",
+    "color": "bg-green-100",
     "maxPlayers": 1
   },
   {
-    "id": "rhyme-riders",
-    "slug": "rhyme-riders",
-    "type": "rhyme",
-    "title": "Rhyme Riders",
-    "durationSeconds": 90,
-    "description": "Listen and choose the word that rhymes to the target word.",
-    "scoring": {
-      "correct": 1,
-      "incorrect": 0
+    "id": "mouse-maze",
+    "slug": "mouse-maze",
+    "type": "tracing",
+    "title": "Mouse Maze 🖱️",
+    "durationSeconds": 180,
+    "description": "Click and hold to trace the dotted lines without releasing the mouse button.",
+    "parameters": {
+      "mean_tracing_speed": 0,
+      "speed_variability": 0,
+      "mouse_lift_count": 0,
+      "mean_deviation_from_path": 0
     },
-    "category": "phonics",
+    "category": "Dysgraphia",
     "difficulty": "medium",
-    "thumbnail": "/games/rhyme-riders/thumb.png",
+    "thumbnail": "/games/mouse-maze/thumb.png",
+    "animal": "🐭",
+    "color": "bg-purple-100",
+    "maxPlayers": 1
+  },
+  {
+    "id": "word-sleuth",
+    "slug": "word-sleuth",
+    "type": "reading",
+    "title": "Word Sleuth 🕵️‍♀️",
+    "durationSeconds": 300,
+    "description": "Read the story at your own pace, then find the prompted words in the text.",
+    "parts": {
+      "reading": true,
+      "recognition": true
+    },
+    "parameters": {
+      "reading_speed": 0,
+      "word_hunt_reaction_time": 0,
+      "word_hunt_error_rate": 0
+    },
+    "category": "Dyslexia",
+    "difficulty": "easy",
+    "thumbnail": "/games/word-sleuth/thumb.png",
+    "animal": "🦉",
+    "color": "bg-blue-100",
+    "maxPlayers": 1
+  },
+  {
+    "id": "quant-quest",
+    "slug": "quant-quest",
+    "type": "math",
+    "title": "Quant-Quest 🔢",
+    "durationSeconds": 240,
+    "description": "Test your number sense with dot comparisons, number comparisons, and simple math problems.",
+    "tasks": {
+      "dot_comparison": true,
+      "number_comparison": true,
+      "simple_sums": true
+    },
+    "parameters": {
+      "dot_compare_reaction_time": 0,
+      "dot_compare_accuracy": 0,
+      "number_compare_reaction_time": 0,
+      "number_compare_accuracy": 0,
+      "arithmetic_accuracy": 0
+    },
+    "category": "Dyscalculia",
+    "difficulty": "medium",
+    "thumbnail": "/games/quant-quest/thumb.png",
     "animal": "🦊",
     "color": "bg-amber-100",
     "maxPlayers": 1
