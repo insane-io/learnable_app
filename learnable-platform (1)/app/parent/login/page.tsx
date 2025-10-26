@@ -60,10 +60,29 @@ export default function ParentLoginPage() {
         description: "Welcome back!",
       })
 
-      // Redirect to setup page first, then dashboard
-      setTimeout(() => {
-        router.push('/parent/setup')
-      }, 1000)
+      // Check if parent has already added children
+      try {
+        const students = await pb.collection('students').getList(1, 1, {
+          filter: `parent_id = "${authData.record.id}"`
+        })
+
+        // If parent has children, go to dashboard, otherwise go to setup
+        if (students.items.length > 0) {
+          setTimeout(() => {
+            router.push('/parent/dashboard')
+          }, 1000)
+        } else {
+          setTimeout(() => {
+            router.push('/parent/setup')
+          }, 1000)
+        }
+      } catch (error) {
+        // If there's an error checking students, default to setup page
+        console.error('Error checking students:', error)
+        setTimeout(() => {
+          router.push('/parent/setup')
+        }, 1000)
+      }
     } catch (error: any) {
       console.error('Login error:', error)
       toast({
