@@ -43,7 +43,6 @@ export default function ParentDashboardPage() {
       const data = result.items.map((item) => ({
         name: item.student_name || item.name,
         id: item.id,
-        // keep optional UI fields if present (avatar, grade, age, etc.)
         avatar: item.avatar,
       }))
       setChildren(data)
@@ -62,47 +61,14 @@ export default function ParentDashboardPage() {
   }, [])
 
   useEffect(() => {
-    // Check if user is authenticated and has parent role
     if (!isAuthenticated() || !hasRole('parent')) {
       router.push('/parent/login')
       return
     }
-
-
-    // Get current user data
     const user = getCurrentUser()
     setCurrentUser(user)
     console.log('Current logged in parent:', user)
   }, [router])
-
-  // const children = [
-  //   {
-  //     id: "alex",
-  //     name: "Alex Johnson",
-  //     age: 8,
-  //     grade: "3rd Grade",
-  //     avatar: "/placeholder.svg?height=40&width=40",
-  //     conditions: ["ADHD", "Mild Dyslexia"],
-  //     currentStreak: 8,
-  //     weeklyProgress: 85,
-  //     lastActivity: "2 hours ago",
-  //     upcomingGoals: 2,
-  //     alerts: 1,
-  //   },
-  //   {
-  //     id: "emma",
-  //     name: "Emma Johnson",
-  //     age: 6,
-  //     grade: "1st Grade",
-  //     avatar: "/placeholder.svg?height=40&width=40",
-  //     conditions: ["Autism Spectrum"],
-  //     currentStreak: 5,
-  //     weeklyProgress: 92,
-  //     lastActivity: "1 hour ago",
-  //     upcomingGoals: 1,
-  //     alerts: 0,
-  //   },
-  // ]
 
   const currentChild = children.find((child) => child.id === selectedChild) || children[0]
 
