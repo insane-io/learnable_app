@@ -1,9 +1,11 @@
 "use client"
 
-import { usePathname } from "next/navigation"
+import { usePathname, useRouter } from "next/navigation"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Home, User, Settings, LogOut } from "lucide-react"
+import { logout } from "@/lib/auth"
+import { useToast } from "@/hooks/use-toast"
 
 interface NavigationProps {
   role: "child" | "parent" | "teacher"
@@ -11,6 +13,21 @@ interface NavigationProps {
 
 export function Navigation({ role }: NavigationProps) {
   const pathname = usePathname()
+  const router = useRouter()
+  const { toast } = useToast()
+
+  const handleLogout = () => {
+    logout()
+    
+    toast({
+      title: "Logged Out",
+      description: "You have been successfully logged out.",
+    })
+    
+    // Redirect based on role
+    const loginPath = role === 'parent' ? '/parent/login' : role === 'teacher' ? '/teacher/login' : '/login'
+    router.push(loginPath)
+  }
 
   const getNavigationItems = () => {
     switch (role) {
@@ -74,7 +91,11 @@ export function Navigation({ role }: NavigationProps) {
             )
           })}
 
-          <Button variant="outline" className="flex items-center gap-2 bg-transparent">
+          <Button 
+            variant="outline" 
+            className="flex items-center gap-2 bg-transparent"
+            onClick={handleLogout}
+          >
             <LogOut className="h-4 w-4" />
             Logout
           </Button>

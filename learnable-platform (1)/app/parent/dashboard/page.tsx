@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Navigation } from "@/components/navigation"
 import { Button } from "@/components/ui/button"
@@ -19,10 +19,25 @@ import {
   AlertCircle,
   CheckCircle,
 } from "lucide-react"
+import { isAuthenticated, hasRole, getCurrentUser } from "@/lib/auth"
 
 export default function ParentDashboardPage() {
   const router = useRouter()
   const [selectedChild, setSelectedChild] = useState("alex")
+  const [currentUser, setCurrentUser] = useState<any>(null)
+
+  useEffect(() => {
+    // Check if user is authenticated and has parent role
+    if (!isAuthenticated() || !hasRole('parent')) {
+      router.push('/parent/login')
+      return
+    }
+    
+    // Get current user data
+    const user = getCurrentUser()
+    setCurrentUser(user)
+    console.log('Current logged in parent:', user)
+  }, [router])
 
   const children = [
     {
@@ -131,6 +146,11 @@ export default function ParentDashboardPage() {
         {/* Header with Child Selection */}
         <div className="mb-8">
           <h1 className="text-3xl font-serif font-black mb-6">Parent Dashboard</h1>
+          {currentUser && (
+            <p className="text-sm text-muted-foreground mb-4">
+              Welcome back, {currentUser.email}
+            </p>
+          )}
 
           <div className="flex flex-wrap gap-4 mb-6">
             {children.map((child) => (

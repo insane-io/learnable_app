@@ -11,11 +11,14 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Heart, Users, GraduationCap, Eye, EyeOff } from "lucide-react"
+import pb from "@/lib/pb"
+import { useToast } from "@/hooks/use-toast"
 
 export default function RegisterPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const role = (searchParams.get("role") as "child" | "parent" | "teacher") || "child"
+  const { toast } = useToast()
 
   const [formData, setFormData] = useState({
     name: "",
@@ -40,7 +43,7 @@ export default function RegisterPage() {
     },
     parent: {
       title: "Create Parent Account",
-      description: "Start tracking your child's learning journey",
+      description: "Create an account to track your child's progress",
       icon: Users,
       bgColor: "bg-secondary/10",
     },
@@ -59,11 +62,54 @@ export default function RegisterPage() {
     e.preventDefault()
     setIsLoading(true)
 
-    // Simulate registration
-    setTimeout(() => {
+    try {
+      if (role === "parent") {
+        // Parent registration with PocketBase
+        const record = await pb.collection('users').create({
+          email: formData.email,
+          password: formData.password,
+          passwordConfirm: formData.password,
+          role: 'parent',
+        })
+
+        // Auto-login after registration
+        await pb.collection('users').authWithPassword(
+          formData.email,
+          formData.password,
+        )
+
+        toast({
+          title: "Registration Successful",
+          description: "Let's set up your children!",
+        })
+
+        setTimeout(() => {
+          router.push('/parent/setup')
+        }, 1500)
+      } else {
+        // Simulate registration for child and teacher
+        setTimeout(() => {
+          setIsLoading(false)
+          router.push("/profile-setup")
+        }, 2000)
+      }
+    } catch (error: any) {
+      console.error('Registration error:', error)
+      
+      let errorMessage = "Unable to create account. Please try again."
+      if (error.data?.email) {
+        errorMessage = "This email is already registered."
+      } else if (error.message) {
+        errorMessage = error.message
+      }
+      
+      toast({
+        title: "Registration Failed",
+        description: errorMessage,
+        variant: "destructive",
+      })
       setIsLoading(false)
-      router.push("/profile-setup")
-    }, 2000)
+    }
   }
 
   const handleInputChange = (field: string, value: string | boolean) => {
@@ -84,20 +130,23 @@ export default function RegisterPage() {
 
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="name" className="text-base font-medium">
-                  {role === "child" ? "Your Name" : "Full Name"}
-                </Label>
-                <Input
-                  id="name"
-                  type="text"
-                  placeholder={role === "child" ? "What should we call you?" : "Enter your full name"}
-                  value={formData.name}
-                  onChange={(e) => handleInputChange("name", e.target.value)}
-                  className="h-12"
-                  required
-                />
-              </div>
+              {role !== "parent" && (
+                <div className="space-y-2">
+                  <Label htmlFor="name" className="text-base font-medium">
+                    {role === "child" ? "Your Name" : "Full Name"}
+                  </Label>
+                  <Input
+                    id="name"
+                    type="text"
+                    placeholder={role === "child" ? "What should we call you?" : "Enter your full name"}
+                    value={formData.name}
+                    onChange={(e) => handleInputChange("name", e.target.value)}
+                    className="h-12"
+                    required={role !== "parent"}
+                    disabled={isLoading}
+                  />
+                </div>
+              )}
 
               {role === "child" ? (
                 <>
@@ -162,6 +211,7 @@ export default function RegisterPage() {
                       onChange={(e) => handleInputChange("email", e.target.value)}
                       className="h-12"
                       required
+                      disabled={isLoading}
                     />
                   </div>
 
@@ -173,11 +223,12 @@ export default function RegisterPage() {
                       <Input
                         id="password"
                         type={showPassword ? "text" : "password"}
-                        placeholder="Create a strong password"
+                        placeholder="Create a password"
                         value={formData.password}
                         onChange={(e) => handleInputChange("password", e.target.value)}
                         className="h-12 pr-12"
                         required
+                        disabled={isLoading}
                       />
                       <Button
                         type="button"
@@ -185,26 +236,30 @@ export default function RegisterPage() {
                         size="sm"
                         className="absolute right-2 top-1/2 -translate-y-1/2 h-8 w-8 p-0"
                         onClick={() => setShowPassword(!showPassword)}
+                        disabled={isLoading}
                       >
                         {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                       </Button>
                     </div>
                   </div>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="confirmPassword" className="text-base font-medium">
-                      Confirm Password
-                    </Label>
-                    <Input
-                      id="confirmPassword"
-                      type="password"
-                      placeholder="Enter your password again"
-                      value={formData.confirmPassword}
-                      onChange={(e) => handleInputChange("confirmPassword", e.target.value)}
-                      className="h-12"
-                      required
-                    />
-                  </div>
+                  {role !== "parent" && (
+                    <div className="space-y-2">
+                      <Label htmlFor="confirmPassword" className="text-base font-medium">
+                        Confirm Password
+                      </Label>
+                      <Input
+                        id="confirmPassword"
+                        type="password"
+                        placeholder="Enter your password again"
+                        value={formData.confirmPassword}
+                        onChange={(e) => handleInputChange("confirmPassword", e.target.value)}
+                        className="h-12"
+                        required
+                        disabled={isLoading}
+                      />
+                    </div>
+                  )}
 
                   {role === "teacher" && (
                     <div className="space-y-2">
@@ -225,26 +280,33 @@ export default function RegisterPage() {
                 </>
               )}
 
-              <div className="flex items-center space-x-2 pt-2">
-                <Checkbox
-                  id="terms"
-                  checked={formData.agreeToTerms}
-                  onCheckedChange={(checked) => handleInputChange("agreeToTerms", checked as boolean)}
-                  required
-                />
-                <Label htmlFor="terms" className="text-sm text-muted-foreground">
-                  I agree to the{" "}
-                  <Link href="/terms" className="text-primary hover:underline">
-                    Terms of Service
-                  </Link>{" "}
-                  and{" "}
-                  <Link href="/privacy" className="text-primary hover:underline">
-                    Privacy Policy
-                  </Link>
-                </Label>
-              </div>
+              {role !== "parent" && (
+                <div className="flex items-center space-x-2 pt-2">
+                  <Checkbox
+                    id="terms"
+                    checked={formData.agreeToTerms}
+                    onCheckedChange={(checked) => handleInputChange("agreeToTerms", checked as boolean)}
+                    required
+                    disabled={isLoading}
+                  />
+                  <Label htmlFor="terms" className="text-sm text-muted-foreground">
+                    I agree to the{" "}
+                    <Link href="/terms" className="text-primary hover:underline">
+                      Terms of Service
+                    </Link>{" "}
+                    and{" "}
+                    <Link href="/privacy" className="text-primary hover:underline">
+                      Privacy Policy
+                    </Link>
+                  </Label>
+                </div>
+              )}
 
-              <Button type="submit" className="w-full h-12 text-lg" disabled={isLoading || !formData.agreeToTerms}>
+              <Button 
+                type="submit" 
+                className="w-full h-12 text-lg" 
+                disabled={isLoading || (role !== "parent" && !formData.agreeToTerms)}
+              >
                 {isLoading ? "Creating Account..." : "Create Account"}
               </Button>
             </form>

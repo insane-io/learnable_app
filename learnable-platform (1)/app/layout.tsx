@@ -2,6 +2,7 @@ import type React from "react"
 import type { Metadata } from "next"
 import { Open_Sans, Montserrat } from "next/font/google"
 import "./globals.css"
+import { Toaster } from "@/components/ui/toaster"
 
 const openSans = Open_Sans({
   subsets: ["latin"],
@@ -29,7 +30,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className={`${openSans.variable} ${montserrat.variable}`}>
-      <body className="font-sans antialiased">{children}</body>
+      <body className="font-sans antialiased">
+        {children}
+        <Toaster />
+      </body>
     </html>
   )
 }
