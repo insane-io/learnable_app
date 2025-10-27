@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect, useRef } from "react"
+import pb from "@/lib/pb"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
@@ -158,28 +159,51 @@ export default function SignalSprinterGame() {
         "Raw Score HitSE": rtVariability
       }
 
-      // Send assessment data to API
-      fetch("/api/analyze/adhd", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify(adhdAssessmentData)
-      })
-        .then(response => {
+      // Send assessment data to API and save combined result to PocketBase
+      const sendAssessment = async () => {
+        try {
+          const response = await fetch("/api/analyze/adhd", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify(adhdAssessmentData)
+          })
+
           if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`)
           }
-          return response.json()
-        })
-        .then(data => {
-          console.log("ADHD assessment sent successfully:", data)
-          console.log("Prediction:", data.prediction ? "ADHD Detected" : "No ADHD")
-          console.log("Confidence:", data.confidence)
-        })
-        .catch(error => {
+
+          const apiResponse = await response.json()
+          console.log("ADHD assessment sent successfully:", apiResponse)
+
+          // Save to PocketBase with both assessment data and API response
+          if (studentId) {
+            try {
+              const combinedData = {
+                assessmentData: adhdAssessmentData,
+                apiResponse
+              }
+
+              const data = {
+                user_id: studentId,
+                data: JSON.stringify(combinedData)
+              }
+
+              const record = await pb.collection('score').create(data)
+              console.log("Successfully saved to PocketBase:", record)
+            } catch (pbError) {
+              console.error("Error saving to PocketBase:", pbError)
+            }
+          } else {
+            console.warn("No studentId found in URL params, skipping PocketBase save")
+          }
+        } catch (error) {
           console.error("Error sending ADHD assessment:", error)
-        })
+        }
+      }
+
+      sendAssessment()
 
       setAssessmentSent(true)
     }
