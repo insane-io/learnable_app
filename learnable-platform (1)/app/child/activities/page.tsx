@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Navigation } from "@/components/navigation"
 import { Button } from "@/components/ui/button"
@@ -14,81 +14,22 @@ export default function ChildActivitiesPage() {
   const router = useRouter()
   const [searchTerm, setSearchTerm] = useState("")
   const [selectedCategory, setSelectedCategory] = useState("all")
+  const [activities, setActivities] = useState<any[] | null>(null)
 
-  const activities = [
-    {
-      id: 1,
-      title: "Word Detective 🔍",
-      description: "Find hidden words in colorful pictures",
-      category: "reading",
-      duration: "10 min",
-      difficulty: "Easy",
-      rating: 4.8,
-      completed: false,
-      emoji: "🔍",
-      color: "bg-blue-100 border-blue-300",
-    },
-    {
-      id: 2,
-      title: "Focus Challenge ⚡",
-      description: "Quick attention and concentration games",
-      category: "focus",
-      duration: "5 min",
-      difficulty: "Medium",
-      rating: 4.9,
-      completed: true,
-      emoji: "⚡",
-      color: "bg-yellow-100 border-yellow-300",
-    },
-    {
-      id: 3,
-      title: "Math Adventure 🧮",
-      description: "Solve fun puzzles with numbers",
-      category: "math",
-      duration: "15 min",
-      difficulty: "Easy",
-      rating: 4.7,
-      completed: false,
-      emoji: "🧮",
-      color: "bg-green-100 border-green-300",
-    },
-    {
-      id: 4,
-      title: "Story Builder 📚",
-      description: "Create your own amazing stories",
-      category: "reading",
-      duration: "20 min",
-      difficulty: "Medium",
-      rating: 4.6,
-      completed: false,
-      emoji: "📚",
-      color: "bg-purple-100 border-purple-300",
-    },
-    {
-      id: 5,
-      title: "Memory Palace 🏰",
-      description: "Remember patterns and sequences",
-      category: "memory",
-      duration: "8 min",
-      difficulty: "Hard",
-      rating: 4.5,
-      completed: false,
-      emoji: "🏰",
-      color: "bg-pink-100 border-pink-300",
-    },
-    {
-      id: 6,
-      title: "Emotion Explorer 😊",
-      description: "Learn about feelings and emotions",
-      category: "social",
-      duration: "12 min",
-      difficulty: "Easy",
-      rating: 4.8,
-      completed: false,
-      emoji: "😊",
-      color: "bg-orange-100 border-orange-300",
-    },
-  ]
+  useEffect(() => {
+    let mounted = true
+    fetch('/data/activities-data.json', { cache: 'no-store' })
+      .then((r) => r.json())
+      .then((data) => {
+        if (mounted) setActivities(data)
+      })
+      .catch(() => {
+        if (mounted) setActivities([])
+      })
+    return () => {
+      mounted = false
+    }
+  }, [])
 
   const categories = [
     { id: "all", label: "All Activities", emoji: "🎯" },
@@ -99,7 +40,7 @@ export default function ChildActivitiesPage() {
     { id: "social", label: "Social", emoji: "👥" },
   ]
 
-  const filteredActivities = activities.filter((activity) => {
+  const filteredActivities = (activities ?? []).filter((activity) => {
     const matchesSearch =
       activity.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
       activity.description.toLowerCase().includes(searchTerm.toLowerCase())
@@ -153,54 +94,59 @@ export default function ChildActivitiesPage() {
         </Tabs>
 
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredActivities.map((activity) => (
-            <Card
-              key={activity.id}
-              className={`border-2 hover:shadow-lg transition-all duration-200 cursor-pointer ${activity.color} ${
-                activity.completed ? "opacity-75" : "hover:scale-105"
-              }`}
-              onClick={() => router.push(`/child/activity/${activity.id}`)}
-            >
-              <CardHeader className="pb-4">
-                <div className="flex items-start justify-between">
-                  <div className="text-4xl mb-2">{activity.emoji}</div>
-                  {activity.completed && <Badge className="bg-primary text-primary-foreground">✅ Done!</Badge>}
-                </div>
-                <CardTitle className="text-xl font-serif font-black">{activity.title}</CardTitle>
-                <p className="text-muted-foreground text-sm">{activity.description}</p>
-              </CardHeader>
+          {activities === null && (
+            <div className="col-span-3 text-center py-12">Loading activities…</div>
+          )}
 
-              <CardContent>
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center gap-2">
-                    <Badge variant="outline" className="text-xs">
-                      <Clock className="h-3 w-3 mr-1" />
-                      {activity.duration}
-                    </Badge>
-                    <Badge className={`text-xs ${getDifficultyColor(activity.difficulty)}`}>
-                      {activity.difficulty}
-                    </Badge>
+          {activities !== null &&
+            filteredActivities.map((activity) => (
+              <Card
+                key={activity.id}
+                className={`border-2 hover:shadow-lg transition-all duration-200 cursor-pointer ${activity.color} ${
+                  activity.completed ? "opacity-75" : "hover:scale-105"
+                }`}
+                onClick={() => router.push(`/child/activity/${activity.id}`)}
+              >
+                <CardHeader className="pb-4">
+                  <div className="flex items-start justify-between">
+                    <div className="text-4xl mb-2">{activity.emoji}</div>
+                    {activity.completed && <Badge className="bg-primary text-primary-foreground">✅ Done!</Badge>}
+                  </div>
+                  <CardTitle className="text-xl font-serif font-black">{activity.title}</CardTitle>
+                  <p className="text-muted-foreground text-sm">{activity.description}</p>
+                </CardHeader>
+
+                <CardContent>
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-2">
+                      <Badge variant="outline" className="text-xs">
+                        <Clock className="h-3 w-3 mr-1" />
+                        {activity.duration}
+                      </Badge>
+                      <Badge className={`text-xs ${getDifficultyColor(activity.difficulty)}`}>
+                        {activity.difficulty}
+                      </Badge>
+                    </div>
+
+                    <div className="flex items-center gap-1">
+                      <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
+                      <span className="text-sm font-medium">{activity.rating}</span>
+                    </div>
                   </div>
 
-                  <div className="flex items-center gap-1">
-                    <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
-                    <span className="text-sm font-medium">{activity.rating}</span>
-                  </div>
-                </div>
-
-                <Button className="w-full text-lg h-12" disabled={activity.completed}>
-                  {activity.completed ? (
-                    <>✅ Completed!</>
-                  ) : (
-                    <>
-                      <Play className="h-5 w-5 mr-2" />
-                      Start Activity
-                    </>
-                  )}
-                </Button>
-              </CardContent>
-            </Card>
-          ))}
+                  <Button className="w-full text-lg h-12" disabled={activity.completed}>
+                    {activity.completed ? (
+                      <>✅ Completed!</>
+                    ) : (
+                      <>
+                        <Play className="h-5 w-5 mr-2" />
+                        Start Activity
+                      </>
+                    )}
+                  </Button>
+                </CardContent>
+              </Card>
+            ))}
         </div>
 
         {filteredActivities.length === 0 && (

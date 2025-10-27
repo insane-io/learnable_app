@@ -1,0 +1,13 @@
+{
+  "gameId": "star-catcher",
+  "slug": "star-catcher",
+  "timestamp": "2025-10-20T12:00:00.000Z",
+  "durationSeconds": 60,
+  "timePlayedSeconds": 60,
+  "finalScore": 18,
+  "phaseReached": 2,
+  "events": [
+    { "type": "click", "shapeType": "yellow-star", "scoreDelta": 2, "atMs": 1200 },
+    { "type": "click", "shapeType": "blue-star", "scoreDelta": 1, "atMs": 2200 }
+  ]
+}
