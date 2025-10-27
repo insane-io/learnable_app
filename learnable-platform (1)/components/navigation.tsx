@@ -40,8 +40,8 @@ export function Navigation({ role }: NavigationProps) {
       case "parent":
         return [
           { href: "/parent/dashboard", label: "Dashboard", icon: Home },
-          { href: "/parent/communication", label: "Messages", icon: User },
-          { href: "/settings", label: "Settings", icon: Settings },
+          // { href: "/parent/communication", label: "Messages", icon: User },
+          // { href: "/settings", label: "Settings", icon: Settings },
         ]
       case "teacher":
         return [

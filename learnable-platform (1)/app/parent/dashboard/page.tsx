@@ -36,12 +36,23 @@ interface AssessmentRecord {
   updated: string
 }
 
+interface ADHDApiResponse {
+  confidence: number
+  prediction: boolean
+  probabilities: {
+    negative: number
+    positive: number
+  }
+}
+
+interface StandardApiResponse {
+  confidence: string
+  has_disease: boolean
+}
+
 interface ParsedAssessment {
   assessmentData: any
-  apiResponse: {
-    confidence: string
-    has_disease: boolean
-  }
+  apiResponse: StandardApiResponse | ADHDApiResponse
   gameName: string
   gameType: 'dyslexia' | 'dyscalculia' | 'dysgraphia' | 'adhd'
   created: string
@@ -116,7 +127,15 @@ export default function ParentDashboardPage() {
         let gameName = ''
         let gameType: 'dyslexia' | 'dyscalculia' | 'dysgraphia' | 'adhd' = 'dyslexia'
 
-        if (data.assessmentData?.dyslexiaAssessment) {
+        // Check for ADHD assessment data first
+        if (data.assessmentData?.['Raw Score Omissions'] !== undefined) {
+          gameName = 'Signal Sprinter'
+          gameType = 'adhd'
+          // Convert ADHD API response to match the format
+          if (data.apiResponse?.confidence !== undefined) {
+            data.apiResponse.confidence = Number(data.apiResponse.confidence)
+          }
+        } else if (data.assessmentData?.dyslexiaAssessment) {
           gameName = data.assessmentData.dyslexiaAssessment.gameName || 'Word Sleuth'
           gameType = 'dyslexia'
         } else if (data.assessmentData?.dyscalculiaAssessment) {
@@ -455,9 +474,30 @@ export default function ParentDashboardPage() {
                         const conditionName = game.gameType === 'dyslexia' ? 'Dyslexia' :
                           game.gameType === 'dyscalculia' ? 'Dyscalculia' :
                             game.gameType === 'dysgraphia' ? 'Dysgraphia' : 'ADHD'
-                        const origConfidence = parseInt(String(game.confidence).replace('%', ''))
-                        const invertedConfidenceValue = isNaN(origConfidence) ? 0 : Math.max(0, Math.min(100, 100 - origConfidence))
-                        const displayConfidence = isNaN(origConfidence) ? 'N/A' : `${invertedConfidenceValue}%`
+
+                        let origConfidence: number;
+                        let invertedConfidenceValue: number;
+                        let displayConfidence: string;
+                        
+                        if (game.gameType === 'adhd') {
+                          // For ADHD, check if it's the ADHD response type
+                          const adhResponse = game.assessments[0]?.apiResponse as ADHDApiResponse
+                          if (adhResponse && 'confidence' in adhResponse) {
+                            origConfidence = adhResponse.confidence * 100
+                            invertedConfidenceValue = Math.round(origConfidence)
+                            displayConfidence = `${invertedConfidenceValue}%`
+                            game.hasDisease = adhResponse.prediction === true
+                          } else {
+                            origConfidence = 0
+                            invertedConfidenceValue = 0
+                            displayConfidence = 'N/A'
+                          }
+                        } else {
+                          // For other conditions, keep the existing logic
+                          origConfidence = parseInt(String(game.confidence).replace('%', ''))
+                          invertedConfidenceValue = isNaN(origConfidence) ? 0 : Math.max(0, Math.min(100, 100 - origConfidence))
+                          displayConfidence = isNaN(origConfidence) ? 'N/A' : `${invertedConfidenceValue}%`
+                        }
 
                         return (
                           <div key={idx} className="bg-white rounded-lg p-4 border border-orange-200">
@@ -505,10 +545,34 @@ export default function ParentDashboardPage() {
                         game.gameType === 'dyscalculia' ? 'Dyscalculia' :
                           game.gameType === 'dysgraphia' ? 'Dysgraphia' : 'ADHD'
 
-                      const origConfidence = parseInt(String(game.confidence).replace('%', ''))
-                      const invertedConfidenceValue = isNaN(origConfidence) ? 0 : Math.max(0, Math.min(100, 100 - origConfidence))
-                      const displayConfidence = isNaN(origConfidence) ? 'N/A' : `${invertedConfidenceValue}%`
-                      const riskLevel = game.hasDisease ? 'High' : invertedConfidenceValue > 50 ? 'High' : 'Very Low'
+                      let origConfidence: number;
+                      let invertedConfidenceValue: number;
+                      let displayConfidence: string;
+                      let riskLevel: string;
+                      
+                      if (game.gameType === 'adhd') {
+                          // For ADHD, check if it's the ADHD response type
+                          const adhResponse = game.assessments[0]?.apiResponse as ADHDApiResponse
+                          if (adhResponse && 'confidence' in adhResponse) {
+                            origConfidence = adhResponse.confidence * 100
+                            invertedConfidenceValue = Math.round(origConfidence)
+                            displayConfidence = `${invertedConfidenceValue}%`
+                            game.hasDisease = adhResponse.prediction === true
+                            riskLevel = adhResponse.prediction ? 'High' : 'Low'
+                          } else {
+                            origConfidence = 0
+                            invertedConfidenceValue = 0
+                            displayConfidence = 'N/A'
+                            riskLevel = 'Unknown'
+                          }
+                      } else {
+                        // For other conditions, keep the existing logic
+                        origConfidence = parseInt(String(game.confidence).replace('%', ''))
+                        invertedConfidenceValue = isNaN(origConfidence) ? 0 : Math.max(0, Math.min(100, 100 - origConfidence))
+                        displayConfidence = isNaN(origConfidence) ? 'N/A' : `${invertedConfidenceValue}%`
+                        riskLevel = game.hasDisease ? 'High' : invertedConfidenceValue > 50 ? 'High' : 'Very Low'
+                      }
+
                       const riskColor = game.hasDisease ? 'text-red-600' : invertedConfidenceValue > 50 ? 'text-yellow-600' : 'text-green-600'
                       const bgColor = game.hasDisease ? 'bg-red-50 border-red-200' : 'bg-green-50 border-green-200'
 

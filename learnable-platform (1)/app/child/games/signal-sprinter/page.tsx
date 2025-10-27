@@ -24,7 +24,7 @@ export default function SignalSprinterGame() {
 
   // preserve studentId when navigating back
   const studentId = searchParams.get('studentId')
-  const gameDuration = 30 // 30 seconds
+  const gameDuration = 10 // 30 seconds
   const shapeDuration = 750 // 750ms to show each shape
   const intervalRange = [800, 1500] // Variable interval between shapes
 
