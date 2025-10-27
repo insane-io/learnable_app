@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 
 export default function SignalSprinterGame() {
   const [gameStarted, setGameStarted] = useState(false)
@@ -16,10 +16,15 @@ export default function SignalSprinterGame() {
   const [reactionTimes, setReactionTimes] = useState<number[]>([])
   const [gameOver, setGameOver] = useState(false)
   const [score, setScore] = useState(0)
-  
+  const [assessmentSent, setAssessmentSent] = useState(false)
+
   const router = useRouter()
-  const gameDuration = 300 // 5 minutes in seconds
-  const shapeDuration = 250 // 250ms to show each shape
+  const searchParams = useSearchParams()
+
+  // preserve studentId when navigating back
+  const studentId = searchParams.get('studentId')
+  const gameDuration = 30 // 30 seconds
+  const shapeDuration = 750 // 750ms to show each shape
   const intervalRange = [800, 1500] // Variable interval between shapes
 
   const shapes = {
@@ -64,7 +69,7 @@ export default function SignalSprinterGame() {
 
   const showNextShape = () => {
     const randomDelay = Math.random() * (intervalRange[1] - intervalRange[0]) + intervalRange[0]
-    
+
     setTimeout(() => {
       if (gameTime >= gameDuration) {
         endGame()
@@ -73,7 +78,7 @@ export default function SignalSprinterGame() {
 
       const rand = Math.random()
       let selectedShape
-      
+
       if (rand < 0.5) {
         selectedShape = shapes.target
       } else if (rand < 0.75) {
@@ -136,7 +141,49 @@ export default function SignalSprinterGame() {
     setReactionTimes([])
     setScore(0)
     setGameOver(false)
+    setAssessmentSent(false)
   }
+
+  // Send ADHD assessment data when game is over (only once)
+  useEffect(() => {
+    if (gameOver && !assessmentSent) {
+      const meanRT = calculateMeanReactionTime()
+      const rtVariability = calculateReactionTimeVariability()
+
+      // Prepare ADHD assessment data for the backend
+      const adhdAssessmentData = {
+        "Raw Score Omissions": omissionErrors,
+        "Raw Score Commissions": commissionErrors,
+        "Raw Score HitRT": meanRT,
+        "Raw Score HitSE": rtVariability
+      }
+
+      // Send assessment data to API
+      fetch("/api/analyze/adhd", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(adhdAssessmentData)
+      })
+        .then(response => {
+          if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`)
+          }
+          return response.json()
+        })
+        .then(data => {
+          console.log("ADHD assessment sent successfully:", data)
+          console.log("Prediction:", data.prediction ? "ADHD Detected" : "No ADHD")
+          console.log("Confidence:", data.confidence)
+        })
+        .catch(error => {
+          console.error("Error sending ADHD assessment:", error)
+        })
+
+      setAssessmentSent(true)
+    }
+  }, [gameOver, assessmentSent])
 
   if (gameOver) {
     const meanRT = calculateMeanReactionTime()
@@ -149,7 +196,7 @@ export default function SignalSprinterGame() {
             <div className="text-center">
               <div className="text-6xl mb-4">🏃‍♂️</div>
               <h1 className="text-4xl font-bold mb-6">Game Complete!</h1>
-              
+
               <div className="bg-white/70 rounded-lg p-6 mb-6">
                 <h2 className="text-2xl font-bold mb-4">Your Results:</h2>
                 <div className="grid grid-cols-2 gap-4 text-left">
@@ -183,6 +230,9 @@ export default function SignalSprinterGame() {
                 <Button size="lg" variant="outline" onClick={() => router.push("/child/games")}>
                   Back to Games 🏠
                 </Button>
+                <Button size="lg" variant="outline" onClick={() => router.push(studentId ? `/parent/dashboard?studentId=${studentId}` : '/parent/dashboard')}>
+                  Back to dashboard
+                </Button>
               </div>
             </div>
           </CardContent>
@@ -200,7 +250,7 @@ export default function SignalSprinterGame() {
               <div className="text-8xl mb-4">🏃‍♂️</div>
               <h1 className="text-4xl font-bold mb-4">Signal Sprinter</h1>
               <p className="text-xl mb-6 text-muted-foreground">ADHD Assessment Game</p>
-              
+
               <div className="bg-white/70 rounded-lg p-6 mb-8 text-left">
                 <h2 className="text-2xl font-bold mb-4">How to Play:</h2>
                 <ul className="space-y-2">
@@ -267,7 +317,7 @@ export default function SignalSprinterGame() {
 
         <div className="mt-6 text-center text-muted-foreground">
           <p className="text-lg">Press SPACEBAR when you see 🟢</p>
-          <div className="mt-4 flex justify-center gap-8">
+          {/* <div className="mt-4 flex justify-center gap-8">
             <div>
               <p className="text-sm">Missed Targets</p>
               <p className="text-2xl font-bold text-orange-600">{omissionErrors}</p>
@@ -280,7 +330,7 @@ export default function SignalSprinterGame() {
               <p className="text-sm">Correct Hits</p>
               <p className="text-2xl font-bold text-green-600">{reactionTimes.length}</p>
             </div>
-          </div>
+          </div> */}
         </div>
       </div>
     </div>

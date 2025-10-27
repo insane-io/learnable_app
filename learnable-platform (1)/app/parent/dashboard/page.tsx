@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 import { Navigation } from "@/components/navigation"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
 import pb from "@/lib/pb"
 import { Progress } from "@/components/ui/progress"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
@@ -26,12 +27,34 @@ import {
 import { isAuthenticated, hasRole, getCurrentUser } from "@/lib/auth"
 import { Bar, BarChart, Line, LineChart, Pie, PieChart, Area, AreaChart, CartesianGrid, XAxis, YAxis, Legend, Cell, PolarAngleAxis, PolarGrid, Radar, RadarChart } from "recharts"
 
+// Types for assessment data
+interface AssessmentRecord {
+  id: string
+  user_id: string
+  data: string
+  created: string
+  updated: string
+}
+
+interface ParsedAssessment {
+  assessmentData: any
+  apiResponse: {
+    confidence: string
+    has_disease: boolean
+  }
+  gameName: string
+  gameType: 'dyslexia' | 'dyscalculia' | 'dysgraphia' | 'adhd'
+  created: string
+}
+
 export default function ParentDashboardPage() {
   const router = useRouter()
   const [selectedChild, setSelectedChild] = useState<string | null>(null)
   const [currentUser, setCurrentUser] = useState<any>(null)
   const [children, setChildren] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [assessments, setAssessments] = useState<ParsedAssessment[]>([])
+  const [isLoadingAssessments, setIsLoadingAssessments] = useState(false)
 
   const fetchStudents = async () => {
     setIsLoading(true)
@@ -59,9 +82,87 @@ export default function ParentDashboardPage() {
     }
   }
 
+  const fetchAssessments = async (studentId: string) => {
+    setIsLoadingAssessments(true)
+    try {
+      console.log('🔍 Fetching assessments for student:', studentId)
+      console.log('🔍 Filter query:', `user_id="${studentId}"`)
+
+      const resultList = await pb.collection('score').getList(1, 50, {
+        filter: `user_id="${studentId}"`,
+        sort: '-created',
+      })
+
+      console.log('📊 Raw assessment records:', resultList.items.length)
+      console.log('📊 Total items in DB:', resultList.totalItems)
+      if (resultList.items.length > 0) {
+        console.log('📊 Sample record:', resultList.items[0])
+      }
+
+      const parsed: ParsedAssessment[] = resultList.items.map((record: any) => {
+        // The data field might be a string or already an object
+        let data = record.data
+        if (typeof data === 'string') {
+          data = JSON.parse(data)
+        }
+
+        console.log('📝 Parsing record:', record.id, 'Game type check:', {
+          hasDyslexia: !!data.assessmentData?.dyslexiaAssessment,
+          hasDyscalculia: !!data.assessmentData?.dyscalculiaAssessment,
+          hasDysgraphia: !!data.assessmentData?.dysgraphiaAssessment,
+        })
+
+        // Determine game type and extract game name
+        let gameName = ''
+        let gameType: 'dyslexia' | 'dyscalculia' | 'dysgraphia' | 'adhd' = 'dyslexia'
+
+        if (data.assessmentData?.dyslexiaAssessment) {
+          gameName = data.assessmentData.dyslexiaAssessment.gameName || 'Word Sleuth'
+          gameType = 'dyslexia'
+        } else if (data.assessmentData?.dyscalculiaAssessment) {
+          gameName = data.assessmentData.dyscalculiaAssessment.gameName || 'Quant-Quest'
+          gameType = 'dyscalculia'
+        } else if (data.assessmentData?.dysgraphiaAssessment) {
+          gameName = data.assessmentData.dysgraphiaAssessment.gameName || 'Mouse Maze'
+          gameType = 'dysgraphia'
+        }
+
+        console.log('✅ Parsed game:', gameName, 'Type:', gameType, 'Confidence:', data.apiResponse?.confidence, 'Has disease:', data.apiResponse?.has_disease)
+
+        return {
+          assessmentData: data.assessmentData,
+          apiResponse: data.apiResponse || { confidence: 'N/A', has_disease: false },
+          gameName,
+          gameType,
+          created: record.created
+        }
+      })
+
+      console.log('✅ Total parsed assessments:', parsed.length)
+      console.log('✅ Parsed assessments summary:', parsed.map(p => ({
+        game: p.gameName,
+        type: p.gameType,
+        confidence: p.apiResponse.confidence,
+        hasDisease: p.apiResponse.has_disease
+      })))
+      setAssessments(parsed)
+    } catch (error) {
+      console.error('❌ Error fetching assessments:', error)
+      setAssessments([])
+    } finally {
+      setIsLoadingAssessments(false)
+    }
+  }
+
   useEffect(() => {
     fetchStudents();
   }, [])
+
+  useEffect(() => {
+    if (selectedChild) {
+      fetchAssessments(selectedChild)
+    }
+  }, [selectedChild])
 
   useEffect(() => {
     if (!isAuthenticated() || !hasRole('parent')) {
@@ -75,340 +176,76 @@ export default function ParentDashboardPage() {
 
   const currentChild = children.find((child) => child.id === selectedChild) || children[0] || { id: '', name: 'Student' }
 
-  // Student-specific game data (dummy data)
-  const studentGameData = {
-    alex: {
-      weeklyGames: [
-        { day: "Mon", games: 5, score: 85, time: 45, mathGames: 2, readingGames: 2, memoryGames: 1 },
-        { day: "Tue", games: 7, score: 92, time: 60, mathGames: 3, readingGames: 2, memoryGames: 2 },
-        { day: "Wed", games: 4, score: 78, time: 35, mathGames: 1, readingGames: 2, memoryGames: 1 },
-        { day: "Thu", games: 8, score: 88, time: 70, mathGames: 3, readingGames: 3, memoryGames: 2 },
-        { day: "Fri", games: 6, score: 95, time: 55, mathGames: 2, readingGames: 2, memoryGames: 2 },
-        { day: "Sat", games: 10, score: 90, time: 85, mathGames: 4, readingGames: 3, memoryGames: 3 },
-        { day: "Sun", games: 9, score: 87, time: 75, mathGames: 3, readingGames: 3, memoryGames: 3 },
-      ],
-      categories: [
-        { category: "Math", games: 18, fill: "hsl(var(--chart-1))" },
-        { category: "Reading", games: 17, fill: "hsl(var(--chart-2))" },
-        { category: "Memory", games: 14, fill: "hsl(var(--chart-3))" },
-        { category: "Puzzle", games: 8, fill: "hsl(var(--chart-4))" },
-        { category: "Focus", games: 6, fill: "hsl(var(--chart-5))" },
-      ],
-      performance: [
-        { week: "Week 1", score: 75, gamesPlayed: 28 },
-        { week: "Week 2", score: 82, gamesPlayed: 35 },
-        { week: "Week 3", score: 78, gamesPlayed: 32 },
-        { week: "Week 4", score: 88, gamesPlayed: 42 },
-        { week: "Week 5", score: 92, gamesPlayed: 49 },
-      ],
-      totalGames: 63,
-      avgScore: 87,
-      totalTime: 425, // minutes
-      streak: 8,
-    },
-    emma: {
-      weeklyGames: [
-        { day: "Mon", games: 6, score: 88, time: 50, mathGames: 2, readingGames: 3, memoryGames: 1 },
-        { day: "Tue", games: 8, score: 95, time: 65, mathGames: 3, readingGames: 3, memoryGames: 2 },
-        { day: "Wed", games: 5, score: 82, time: 40, mathGames: 2, readingGames: 2, memoryGames: 1 },
-        { day: "Thu", games: 7, score: 91, time: 60, mathGames: 2, readingGames: 3, memoryGames: 2 },
-        { day: "Fri", games: 9, score: 97, time: 70, mathGames: 3, readingGames: 4, memoryGames: 2 },
-        { day: "Sat", games: 11, score: 93, time: 90, mathGames: 4, readingGames: 4, memoryGames: 3 },
-        { day: "Sun", games: 10, score: 89, time: 80, mathGames: 3, readingGames: 4, memoryGames: 3 },
-      ],
-      categories: [
-        { category: "Math", games: 19, fill: "hsl(var(--chart-1))" },
-        { category: "Reading", games: 23, fill: "hsl(var(--chart-2))" },
-        { category: "Memory", games: 14, fill: "hsl(var(--chart-3))" },
-        { category: "Puzzle", games: 10, fill: "hsl(var(--chart-4))" },
-        { category: "Focus", games: 8, fill: "hsl(var(--chart-5))" },
-      ],
-      performance: [
-        { week: "Week 1", score: 80, gamesPlayed: 32 },
-        { week: "Week 2", score: 85, gamesPlayed: 38 },
-        { week: "Week 3", score: 88, gamesPlayed: 40 },
-        { week: "Week 4", score: 91, gamesPlayed: 48 },
-        { week: "Week 5", score: 95, gamesPlayed: 56 },
-      ],
-      totalGames: 74,
-      avgScore: 92,
-      totalTime: 455, // minutes
-      streak: 5,
-    },
+  // Function to start playing as the selected child
+  const handlePlayAsChild = () => {
+    const studentId = selectedChild || children[0]?.id
+    if (studentId) {
+      console.log('🎮 Parent starting play session for student:', studentId)
+      router.push(`/child/welcome/${studentId}`)
+    } else {
+      console.error('No student selected')
+    }
   }
 
-  // Get current student's data
-  const currentStudentData = studentGameData[selectedChild as keyof typeof studentGameData] || studentGameData.alex
-  const weeklyGameData = currentStudentData.weeklyGames
-  const gamesByCategory = currentStudentData.categories
-  const performanceData = currentStudentData.performance
+  // Process assessment data for visualizations
+  const getGameStats = () => {
+    const gameGroups = assessments.reduce((acc, assessment) => {
+      const key = assessment.gameName
+      if (!acc[key]) {
+        acc[key] = []
+      }
+      acc[key].push(assessment)
+      return acc
+    }, {} as Record<string, ParsedAssessment[]>)
 
-  // Individual game statistics
-  const individualGames = {
-    alex: [
-      {
-        id: 1,
-        name: "Signal Sprinter",
-        category: "ADHD Assessment Game",
-        condition: "ADHD",
-        timesPlayed: 12,
-        bestScore: 95,
-        avgScore: 87,
-        lastPlayed: "2 hours ago",
-        totalTime: 84, // minutes
-        improvement: "+8%",
-        difficulty: "Medium",
-        status: "completed",
-        progressHistory: [
-          { attempt: "1", score: 72 },
-          { attempt: "2", score: 75 },
-          { attempt: "3", score: 78 },
-          { attempt: "4", score: 82 },
-          { attempt: "5", score: 85 },
-          { attempt: "6", score: 87 },
-          { attempt: "7", score: 89 },
-          { attempt: "8", score: 90 },
-          { attempt: "9", score: 92 },
-          { attempt: "10", score: 93 },
-          { attempt: "11", score: 94 },
-          { attempt: "12", score: 95 },
-        ],
-      },
-      {
-        id: 2,
-        name: "Mouse Maze",
-        category: "Dysgraphia Assessment Game",
-        condition: "Dysgraphia",
-        timesPlayed: 8,
-        bestScore: 82,
-        avgScore: 76,
-        lastPlayed: "5 hours ago",
-        totalTime: 56,
-        improvement: "+5%",
-        difficulty: "Hard",
-        status: "in-progress",
-        progressHistory: [
-          { attempt: "1", score: 68 },
-          { attempt: "2", score: 71 },
-          { attempt: "3", score: 73 },
-          { attempt: "4", score: 75 },
-          { attempt: "5", score: 77 },
-          { attempt: "6", score: 78 },
-          { attempt: "7", score: 80 },
-          { attempt: "8", score: 82 },
-        ],
-      },
-      {
-        id: 3,
-        name: "Word Sleuth",
-        category: "Dyslexia Assessment Game",
-        condition: "Dyslexia",
-        timesPlayed: 15,
-        bestScore: 91,
-        avgScore: 85,
-        lastPlayed: "1 day ago",
-        totalTime: 105,
-        improvement: "+12%",
-        difficulty: "Medium",
-        status: "completed",
-        progressHistory: [
-          { attempt: "1", score: 70 },
-          { attempt: "2", score: 73 },
-          { attempt: "3", score: 76 },
-          { attempt: "4", score: 78 },
-          { attempt: "5", score: 80 },
-          { attempt: "6", score: 82 },
-          { attempt: "7", score: 84 },
-          { attempt: "8", score: 85 },
-          { attempt: "9", score: 86 },
-          { attempt: "10", score: 87 },
-          { attempt: "11", score: 88 },
-          { attempt: "12", score: 89 },
-          { attempt: "13", score: 90 },
-          { attempt: "14", score: 90 },
-          { attempt: "15", score: 91 },
-        ],
-      },
-      {
-        id: 4,
-        name: "Quant-Quest",
-        category: "Dyscalculia Assessment Game",
-        condition: "Dyscalculia",
-        timesPlayed: 10,
-        bestScore: 88,
-        avgScore: 80,
-        lastPlayed: "3 hours ago",
-        totalTime: 70,
-        improvement: "+6%",
-        difficulty: "Easy",
-        status: "completed",
-        progressHistory: [
-          { attempt: "1", score: 74 },
-          { attempt: "2", score: 76 },
-          { attempt: "3", score: 77 },
-          { attempt: "4", score: 78 },
-          { attempt: "5", score: 80 },
-          { attempt: "6", score: 81 },
-          { attempt: "7", score: 83 },
-          { attempt: "8", score: 85 },
-          { attempt: "9", score: 86 },
-          { attempt: "10", score: 88 },
-        ],
-      },
-    ],
-    emma: [
-      {
-        id: 1,
-        name: "Signal Sprinter",
-        category: "ADHD Assessment Game",
-        condition: "ADHD",
-        timesPlayed: 10,
-        bestScore: 92,
-        avgScore: 88,
-        lastPlayed: "1 hour ago",
-        totalTime: 70,
-        improvement: "+10%",
-        difficulty: "Medium",
-        status: "completed",
-        progressHistory: [
-          { attempt: "1", score: 78 },
-          { attempt: "2", score: 80 },
-          { attempt: "3", score: 82 },
-          { attempt: "4", score: 84 },
-          { attempt: "5", score: 86 },
-          { attempt: "6", score: 88 },
-          { attempt: "7", score: 89 },
-          { attempt: "8", score: 90 },
-          { attempt: "9", score: 91 },
-          { attempt: "10", score: 92 },
-        ],
-      },
-      {
-        id: 2,
-        name: "Mouse Maze",
-        category: "Dysgraphia Assessment Game",
-        condition: "Dysgraphia",
-        timesPlayed: 14,
-        bestScore: 96,
-        avgScore: 91,
-        lastPlayed: "3 hours ago",
-        totalTime: 98,
-        improvement: "+15%",
-        difficulty: "Medium",
-        status: "completed",
-        progressHistory: [
-          { attempt: "1", score: 76 },
-          { attempt: "2", score: 80 },
-          { attempt: "3", score: 82 },
-          { attempt: "4", score: 85 },
-          { attempt: "5", score: 87 },
-          { attempt: "6", score: 89 },
-          { attempt: "7", score: 90 },
-          { attempt: "8", score: 91 },
-          { attempt: "9", score: 92 },
-          { attempt: "10", score: 93 },
-          { attempt: "11", score: 94 },
-          { attempt: "12", score: 95 },
-          { attempt: "13", score: 95 },
-          { attempt: "14", score: 96 },
-        ],
-      },
-      {
-        id: 3,
-        name: "Word Sleuth",
-        category: "Dyslexia Assessment Game",
-        condition: "Dyslexia",
-        timesPlayed: 18,
-        bestScore: 97,
-        avgScore: 93,
-        lastPlayed: "2 hours ago",
-        totalTime: 126,
-        improvement: "+14%",
-        difficulty: "Easy",
-        status: "completed",
-        progressHistory: [
-          { attempt: "1", score: 78 },
-          { attempt: "2", score: 81 },
-          { attempt: "3", score: 83 },
-          { attempt: "4", score: 85 },
-          { attempt: "5", score: 87 },
-          { attempt: "6", score: 89 },
-          { attempt: "7", score: 90 },
-          { attempt: "8", score: 91 },
-          { attempt: "9", score: 92 },
-          { attempt: "10", score: 93 },
-          { attempt: "11", score: 94 },
-          { attempt: "12", score: 94 },
-          { attempt: "13", score: 95 },
-          { attempt: "14", score: 95 },
-          { attempt: "15", score: 96 },
-          { attempt: "16", score: 96 },
-          { attempt: "17", score: 97 },
-          { attempt: "18", score: 97 },
-        ],
-      },
-      {
-        id: 4,
-        name: "Quant-Quest",
-        category: "Dyscalculia Assessment Game",
-        condition: "Dyscalculia",
-        timesPlayed: 12,
-        bestScore: 94,
-        avgScore: 89,
-        lastPlayed: "4 hours ago",
-        totalTime: 84,
-        improvement: "+11%",
-        difficulty: "Medium",
-        status: "completed",
-        progressHistory: [
-          { attempt: "1", score: 80 },
-          { attempt: "2", score: 82 },
-          { attempt: "3", score: 84 },
-          { attempt: "4", score: 86 },
-          { attempt: "5", score: 87 },
-          { attempt: "6", score: 88 },
-          { attempt: "7", score: 89 },
-          { attempt: "8", score: 90 },
-          { attempt: "9", score: 91 },
-          { attempt: "10", score: 92 },
-          { attempt: "11", score: 93 },
-          { attempt: "12", score: 94 },
-        ],
-      },
-    ],
+    return Object.entries(gameGroups).map(([gameName, gameAssessments]) => {
+      const gameType = gameAssessments[0].gameType
+      let scores: number[] = []
+
+      // Extract scores based on game type
+      gameAssessments.forEach(assessment => {
+        if (gameType === 'dyslexia') {
+          scores.push(assessment.assessmentData.dyslexiaAssessment?.performance?.accuracy || 0)
+        } else if (gameType === 'dyscalculia') {
+          const progressHistory = assessment.assessmentData.dyscalculiaAssessment?.progressHistory || []
+          if (progressHistory.length > 0) {
+            scores.push(progressHistory[progressHistory.length - 1].arithmeticAccuracy || 0)
+          }
+        } else if (gameType === 'dysgraphia') {
+          scores.push(assessment.assessmentData.dysgraphiaAssessment?.copyingPerformance?.accuracyRate || 0)
+        }
+      })
+
+      const avgScore = scores.length > 0 ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : 0
+      const bestScore = scores.length > 0 ? Math.max(...scores) : 0
+
+      return {
+        name: gameName,
+        gameType,
+        timesPlayed: gameAssessments.length,
+        avgScore,
+        bestScore,
+        assessments: gameAssessments,
+        hasDisease: gameAssessments.some(a => a.apiResponse?.has_disease),
+        confidence: gameAssessments[0]?.apiResponse?.confidence || 'N/A'
+      }
+    })
   }
 
-  const currentGames = individualGames[selectedChild as keyof typeof individualGames] || individualGames.alex
+  const gameStats = getGameStats()
 
-  // Game comparison data
-  const gameComparisonData = currentGames.map(game => ({
-    name: game.name.split(' ')[0], // Shortened name for chart
-    avgScore: game.avgScore,
-    bestScore: game.bestScore,
-    timesPlayed: game.timesPlayed,
-  }))
+  // Calculate overall statistics
+  const totalGames = assessments.length
+  const averageScore = gameStats.length > 0
+    ? Math.round(gameStats.reduce((sum, game) => sum + game.avgScore, 0) / gameStats.length)
+    : 0
 
-  // Skill assessment radar data
-  const skillRadarData = {
-    alex: [
-      { skill: "Attention", score: 87 },
-      { skill: "Memory", score: 82 },
-      { skill: "Reading", score: 85 },
-      { skill: "Math", score: 80 },
-      { skill: "Motor Skills", score: 76 },
-      { skill: "Problem Solving", score: 88 },
-    ],
-    emma: [
-      { skill: "Attention", score: 88 },
-      { skill: "Memory", score: 90 },
-      { skill: "Reading", score: 93 },
-      { skill: "Math", score: 89 },
-      { skill: "Motor Skills", score: 91 },
-      { skill: "Problem Solving", score: 92 },
-    ],
-  }
-
-  const currentSkillData = skillRadarData[selectedChild as keyof typeof skillRadarData] || skillRadarData.alex
+  // Game distribution by type
+  const gamesByType = [
+    { name: 'Dyslexia', value: assessments.filter(a => a.gameType === 'dyslexia').length, fill: 'hsl(var(--chart-1))' },
+    { name: 'Dyscalculia', value: assessments.filter(a => a.gameType === 'dyscalculia').length, fill: 'hsl(var(--chart-2))' },
+    { name: 'Dysgraphia', value: assessments.filter(a => a.gameType === 'dysgraphia').length, fill: 'hsl(var(--chart-3))' },
+  ].filter(item => item.value > 0)
 
   const chartConfig = {
     games: {
@@ -419,79 +256,11 @@ export default function ParentDashboardPage() {
       label: "Average Score",
       color: "hsl(var(--chart-2))",
     },
-    time: {
-      label: "Time (min)",
+    accuracy: {
+      label: "Accuracy",
       color: "hsl(var(--chart-3))",
     },
   } satisfies ChartConfig
-
-  const weeklyStats = {
-    totalActivities: 24,
-    totalTime: 180, // minutes
-    averageScore: 87,
-    improvementAreas: ["Reading Comprehension", "Focus Duration"],
-    strengths: ["Math Problem Solving", "Visual Learning"],
-  }
-
-  const recentActivities = [
-    {
-      id: 1,
-      name: "Word Detective",
-      date: "Today, 2:30 PM",
-      duration: "12 min",
-      score: 85,
-      category: "Reading",
-      status: "completed",
-    },
-    {
-      id: 2,
-      name: "Focus Challenge",
-      date: "Today, 1:15 PM",
-      duration: "8 min",
-      score: 92,
-      category: "Attention",
-      status: "completed",
-    },
-    {
-      id: 3,
-      name: "Math Adventure",
-      date: "Yesterday, 4:20 PM",
-      duration: "15 min",
-      score: 78,
-      category: "Mathematics",
-      status: "completed",
-    },
-  ]
-
-  const notifications = [
-    {
-      id: 1,
-      type: "achievement",
-      title: "New Achievement Unlocked!",
-      message: "Alex completed their 8-day learning streak",
-      time: "1 hour ago",
-      icon: Award,
-      color: "text-green-600",
-    },
-    {
-      id: 2,
-      type: "teacher",
-      title: "Message from Ms. Smith",
-      message: "Great progress on reading activities this week!",
-      time: "3 hours ago",
-      icon: MessageCircle,
-      color: "text-blue-600",
-    },
-    {
-      id: 3,
-      type: "alert",
-      title: "Attention Needed",
-      message: "Consider shorter activity sessions for better focus",
-      time: "1 day ago",
-      icon: AlertCircle,
-      color: "text-orange-600",
-    },
-  ]
 
   return (
     <div className="min-h-screen bg-background">
@@ -542,7 +311,7 @@ export default function ParentDashboardPage() {
                           className="mt-1 inline-flex items-center gap-1.5 px-3 py-1 rounded-md bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-medium transition-all duration-200 hover:shadow-md"
                           onClick={(e) => {
                             e.stopPropagation()
-                            router.push(`/child/welcome`)
+                            router.push(`/child/welcome/${child.id}`)
                           }}
                           aria-label="Start activities"
                         >
@@ -558,485 +327,465 @@ export default function ParentDashboardPage() {
           )}
         </div>
 
+        {/* Section Header with Refresh Button */}
+        {selectedChild && (
+          <div className="mb-6 flex items-center justify-between">
+            <div>
+              <h2 className="text-2xl font-serif font-bold">Assessment Results</h2>
+              <p className="text-sm text-muted-foreground mt-1">
+                Viewing results for {currentChild.name}
+              </p>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => fetchAssessments(selectedChild)}
+              disabled={isLoadingAssessments}
+            >
+              {isLoadingAssessments ? (
+                <>
+                  <div className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-solid border-current border-r-transparent mr-2"></div>
+                  Loading...
+                </>
+              ) : (
+                <>
+                  <Activity className="h-4 w-4 mr-2" />
+                  Refresh Data
+                </>
+              )}
+            </Button>
+          </div>
+        )}
+
         {/* Analytics & Statistics Section */}
         <div className="grid gap-6 mb-8">
-          {/* Summary Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="text-sm font-medium">Total Games</CardTitle>
-                <Gamepad2 className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{currentStudentData.totalGames}</div>
-                <p className="text-xs text-muted-foreground">
-                  {weeklyGameData.reduce((sum, day) => sum + day.games, 0)} games this week
+          {/* Show loading state */}
+          {isLoadingAssessments ? (
+            <div className="flex items-center justify-center py-12">
+              <div className="text-center">
+                <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-primary border-r-transparent align-[-0.125em] motion-reduce:animate-[spin_1.5s_linear_infinite]"></div>
+                <p className="mt-4 text-sm text-muted-foreground">Loading assessment data...</p>
+              </div>
+            </div>
+          ) : assessments.length === 0 ? (
+            <Card className="p-12">
+              <div className="text-center">
+                <Gamepad2 className="h-16 w-16 mx-auto text-muted-foreground mb-4" />
+                <h3 className="text-lg font-semibold mb-2">No Assessments Yet</h3>
+                <p className="text-muted-foreground mb-4">
+                  {currentChild.name} hasn't completed any assessment games yet.
                 </p>
-              </CardContent>
+                <Button onClick={() => router.push(`/child/welcome/${selectedChild}`)}>
+                  <Play className="h-4 w-4 mr-2" />
+                  Start Playing
+                </Button>
+              </div>
             </Card>
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="text-sm font-medium">Average Score</CardTitle>
-                <Target className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{currentStudentData.avgScore}%</div>
-                <p className="text-xs text-muted-foreground">
-                  {currentStudentData.avgScore > 85 ? '+' : ''}{currentStudentData.avgScore - 85}% from baseline
-                </p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="text-sm font-medium">Play Time</CardTitle>
-                <Clock className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">
-                  {Math.floor(weeklyGameData.reduce((sum, day) => sum + day.time, 0) / 60)}h {weeklyGameData.reduce((sum, day) => sum + day.time, 0) % 60}m
-                </div>
-                <p className="text-xs text-muted-foreground">This week</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="text-sm font-medium">Streak</CardTitle>
-                <Award className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{currentStudentData.streak} days</div>
-                <p className="text-xs text-muted-foreground">Keep it up! 🔥</p>
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Charts Row 1 */}
-          <div className="grid md:grid-cols-2 gap-6">
-            {/* Weekly Games Activity */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Weekly Game Activity</CardTitle>
-                <CardDescription>Games played per day this week</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <ChartContainer config={chartConfig}>
-                  <BarChart 
-                    accessibilityLayer
-                    data={weeklyGameData}
-                    margin={{
-                      left: 12,
-                      right: 12,
-                    }}
-                  >
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                    <XAxis 
-                      dataKey="day" 
-                      tickLine={false} 
-                      tickMargin={10} 
-                      axisLine={false} 
-                    />
-                    <ChartTooltip 
-                      cursor={false}
-                      content={<ChartTooltipContent />} 
-                    />
-                    <Bar dataKey="games" fill="var(--color-games)" radius={8} />
-                  </BarChart>
-                </ChartContainer>
-              </CardContent>
-              <CardFooter className="flex-col items-start gap-2 text-sm">
-                <div className="flex gap-2 font-medium leading-none">
-                  {weeklyGameData.reduce((sum, day) => sum + day.games, 0)} games played <TrendingUp className="h-4 w-4" />
-                </div>
-                <div className="leading-none text-muted-foreground">
-                  Showing {currentChild.name}'s activity for the last 7 days
-                </div>
-              </CardFooter>
-            </Card>
-
-            {/* Performance Trend */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Performance Trend</CardTitle>
-                <CardDescription>Average score over 5 weeks</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <ChartContainer config={chartConfig}>
-                  <AreaChart 
-                    accessibilityLayer
-                    data={performanceData}
-                    margin={{
-                      left: 12,
-                      right: 12,
-                    }}
-                  >
-                    <CartesianGrid vertical={false} />
-                    <XAxis 
-                      dataKey="week" 
-                      tickLine={false} 
-                      axisLine={false}
-                      tickMargin={8}
-                      tickFormatter={(value) => value.slice(0, 3)}
-                    />
-                    <ChartTooltip
-                      cursor={false}
-                      content={<ChartTooltipContent indicator="dot" />}
-                    />
-                    <Area 
-                      dataKey="score"
-                      type="natural"
-                      fill="var(--color-score)" 
-                      fillOpacity={0.4}
-                      stroke="var(--color-score)"
-                    />
-                  </AreaChart>
-                </ChartContainer>
-              </CardContent>
-              <CardFooter>
-                <div className="flex w-full items-start gap-2 text-sm">
-                  <div className="grid gap-2">
-                    <div className="flex items-center gap-2 leading-none font-medium">
-                      Improved by {performanceData[performanceData.length - 1].score - performanceData[0].score} points <TrendingUp className="h-4 w-4" />
+          ) : (
+            <>
+              {/* Summary Cards */}
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between pb-2">
+                    <CardTitle className="text-sm font-medium">Total Assessments</CardTitle>
+                    <Gamepad2 className="h-4 w-4 text-muted-foreground" />
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold">{totalGames}</div>
+                    <p className="text-xs text-muted-foreground">
+                      Across {gameStats.length} game{gameStats.length !== 1 ? 's' : ''}
+                    </p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between pb-2">
+                    <CardTitle className="text-sm font-medium">Average Score</CardTitle>
+                    <Target className="h-4 w-4 text-muted-foreground" />
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold">{averageScore}%</div>
+                    <p className="text-xs text-muted-foreground">
+                      {averageScore >= 80 ? 'Excellent performance' : averageScore >= 60 ? 'Good progress' : 'Needs practice'}
+                    </p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between pb-2">
+                    <CardTitle className="text-sm font-medium">Assessment Types</CardTitle>
+                    <Activity className="h-4 w-4 text-muted-foreground" />
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold">{gamesByType.length}</div>
+                    <p className="text-xs text-muted-foreground">
+                      Different assessment categories
+                    </p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between pb-2">
+                    <CardTitle className="text-sm font-medium">Health Alerts</CardTitle>
+                    <AlertCircle className="h-4 w-4 text-muted-foreground" />
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold">
+                      {gameStats.filter(g => g.hasDisease).length}
                     </div>
-                    <div className="text-muted-foreground flex items-center gap-2 leading-none">
-                      {currentChild.name} is showing great progress!
+                    <p className="text-xs text-muted-foreground">
+                      {gameStats.filter(g => g.hasDisease).length > 0 ? 'Areas need attention' : 'All clear'}
+                    </p>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Disease Risk Assessment Summary */}
+              {gameStats.some(g => g.hasDisease) && (
+                <Card className="border-orange-200 bg-orange-50/50">
+                  <CardHeader>
+                    <div className="flex items-center gap-2">
+                      <AlertCircle className="h-5 w-5 text-orange-600" />
+                      <CardTitle className="text-lg">Health Assessment Summary</CardTitle>
                     </div>
-                  </div>
-                </div>
-              </CardFooter>
-            </Card>
-          </div>
+                    <CardDescription>
+                      AI analysis indicates potential areas that may need professional evaluation
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid md:grid-cols-3 gap-4">
+                      {gameStats.filter(g => g.hasDisease).map((game, idx) => {
+                        const conditionName = game.gameType === 'dyslexia' ? 'Dyslexia' :
+                          game.gameType === 'dyscalculia' ? 'Dyscalculia' :
+                            game.gameType === 'dysgraphia' ? 'Dysgraphia' : 'ADHD'
+                        const origConfidence = parseInt(String(game.confidence).replace('%', ''))
+                        const invertedConfidenceValue = isNaN(origConfidence) ? 0 : Math.max(0, Math.min(100, 100 - origConfidence))
+                        const displayConfidence = isNaN(origConfidence) ? 'N/A' : `${invertedConfidenceValue}%`
 
-          {/* Charts Row 2 */}
-          <div className="grid md:grid-cols-2 gap-6">
-            {/* Games by Category */}
-            <Card className="flex flex-col">
-              <CardHeader className="items-center pb-0">
-                <CardTitle>Games by Category</CardTitle>
-                <CardDescription>Distribution of games played</CardDescription>
-              </CardHeader>
-              <CardContent className="flex-1 pb-0">
-                <ChartContainer
-                  config={chartConfig}
-                  className="mx-auto aspect-square max-h-[250px] [&_.recharts-pie-label-text]:fill-foreground"
-                >
-                  <PieChart>
-                    <ChartTooltip content={<ChartTooltipContent hideLabel />} />
-                    <Pie
-                      data={gamesByCategory}
-                      dataKey="games"
-                      nameKey="category"
-                      label
-                      labelLine={false}
-                    >
-                      {gamesByCategory.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.fill} />
-                      ))}
-                    </Pie>
-                  </PieChart>
-                </ChartContainer>
-              </CardContent>
-              <CardFooter className="flex-col gap-2 text-sm">
-                <div className="flex items-center gap-2 font-medium leading-none">
-                  {gamesByCategory[0].category} games are most popular <TrendingUp className="h-4 w-4" />
-                </div>
-                <div className="leading-none text-muted-foreground">
-                  {currentChild.name}'s favorite game category
-                </div>
-              </CardFooter>
-            </Card>
+                        return (
+                          <div key={idx} className="bg-white rounded-lg p-4 border border-orange-200">
+                            <div className="flex items-center justify-between mb-2">
+                              <h4 className="font-semibold text-sm">{conditionName}</h4>
+                              <Badge variant="destructive" className="text-xs">
+                                Risk Detected
+                              </Badge>
+                            </div>
+                            <div className="space-y-2">
+                              <div>
+                                <div className="flex justify-between text-xs mb-1">
+                                  <span className="text-muted-foreground">Disease probability</span>
+                                  <span className="font-bold">{displayConfidence}</span>
+                                </div>
+                                <Progress value={invertedConfidenceValue} className="h-2" />
+                              </div>
+                              <p className="text-xs text-muted-foreground">
+                                Based on {game.timesPlayed} assessment{game.timesPlayed !== 1 ? 's' : ''}
+                              </p>
+                              <p className="text-xs font-medium text-orange-700">
+                                ⚠️ Consider professional evaluation
+                              </p>
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
 
-            {/* Skills Assessment Radar */}
-            <Card>
-              <CardHeader className="items-center">
-                <CardTitle>Skills Assessment</CardTitle>
-                <CardDescription>
-                  Performance across different skill areas
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="pb-0">
-                <ChartContainer
-                  config={chartConfig}
-                  className="mx-auto aspect-square max-h-[250px]"
-                >
-                  <RadarChart data={currentSkillData}>
-                    <ChartTooltip cursor={false} content={<ChartTooltipContent />} />
-                    <PolarAngleAxis dataKey="skill" />
-                    <PolarGrid />
-                    <Radar
-                      dataKey="score"
-                      fill="hsl(var(--chart-1))"
-                      fillOpacity={0.6}
-                      stroke="hsl(var(--chart-1))"
-                      strokeWidth={2}
-                      dot={{
-                        r: 4,
-                        fillOpacity: 1,
-                      }}
-                    />
-                  </RadarChart>
-                </ChartContainer>
-              </CardContent>
-              <CardFooter className="flex-col gap-2 text-sm">
-                <div className="flex items-center gap-2 leading-none font-medium">
-                  {currentChild.name}'s strongest: {currentSkillData.reduce((prev, current) => 
-                    (prev.score > current.score) ? prev : current
-                  ).skill} <TrendingUp className="h-4 w-4" />
-                </div>
-                <div className="text-muted-foreground flex items-center gap-2 leading-none">
-                  Overall skill assessment scores
-                </div>
-              </CardFooter>
-            </Card>
-          </div>
-        </div>
-
-        {/* Individual Game Statistics */}
-        <div className="mb-8">
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-2xl font-serif font-bold">Assessment Games Performance</h2>
-            <Badge variant="outline" className="text-sm">
-              {currentGames.length} Games Tracked
-            </Badge>
-          </div>
-
-          {/* Game Comparison Charts */}
-          <div className="grid md:grid-cols-2 gap-6 mb-6">
-            {/* Overall Game Scores Comparison */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Game Scores Comparison</CardTitle>
-                <CardDescription>Average vs Best scores across all games</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <ChartContainer config={chartConfig}>
-                  <BarChart 
-                    accessibilityLayer
-                    data={gameComparisonData}
-                    margin={{
-                      left: 12,
-                      right: 12,
-                    }}
-                  >
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                    <XAxis 
-                      dataKey="name" 
-                      tickLine={false} 
-                      tickMargin={10} 
-                      axisLine={false}
-                      fontSize={12}
-                    />
-                    <YAxis domain={[0, 100]} />
-                    <ChartTooltip 
-                      cursor={false}
-                      content={<ChartTooltipContent />} 
-                    />
-                    <Legend />
-                    <Bar dataKey="avgScore" name="Avg Score" fill="hsl(var(--chart-2))" radius={4} />
-                    <Bar dataKey="bestScore" name="Best Score" fill="hsl(var(--chart-1))" radius={4} />
-                  </BarChart>
-                </ChartContainer>
-              </CardContent>
-              <CardFooter className="flex-col items-start gap-2 text-sm">
-                <div className="leading-none text-muted-foreground">
-                  {currentChild.name}'s performance across all assessment games
-                </div>
-              </CardFooter>
-            </Card>
-
-            {/* Game Engagement - Times Played */}
-            <Card className="flex flex-col">
-              <CardHeader className="items-center pb-0">
-                <CardTitle>Game Engagement</CardTitle>
-                <CardDescription>Number of times each game was played</CardDescription>
-              </CardHeader>
-              <CardContent className="flex-1 pb-0">
-                <ChartContainer 
-                  config={chartConfig} 
-                  className="mx-auto aspect-square max-h-[250px] [&_.recharts-pie-label-text]:fill-foreground"
-                >
-                  <PieChart>
-                    <ChartTooltip content={<ChartTooltipContent hideLabel />} />
-                    <Pie
-                      data={gameComparisonData}
-                      dataKey="timesPlayed"
-                      nameKey="name"
-                      label
-                      labelLine={false}
-                    >
-                      {gameComparisonData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={`hsl(var(--chart-${(index % 5) + 1}))`} />
-                      ))}
-                    </Pie>
-                  </PieChart>
-                </ChartContainer>
-              </CardContent>
-              <CardFooter className="flex-col gap-2 text-sm">
-                <div className="flex items-center gap-2 font-medium leading-none">
-                  Total plays: {gameComparisonData.reduce((sum, game) => sum + game.timesPlayed, 0)} <Activity className="h-4 w-4" />
-                </div>
-                <div className="leading-none text-muted-foreground">
-                  Showing engagement across all assessment games
-                </div>
-              </CardFooter>
-            </Card>
-          </div>
-
-          {/* Individual Game Progress Charts */}
-          <div className="grid md:grid-cols-2 gap-6">
-            {currentGames.map((game) => (
-              <Card key={game.id}>
+              {/* All Conditions Summary - Show all assessed conditions */}
+              <Card>
                 <CardHeader>
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <CardTitle className="text-lg">{game.name}</CardTitle>
-                      <CardDescription className="mt-1">
-                        {game.category}
-                      </CardDescription>
-                    </div>
-                    <Badge 
-                      variant="outline"
-                      className={`text-xs ${
-                        game.difficulty === "Easy" 
-                          ? "bg-green-50 text-green-700 border-green-200"
-                          : game.difficulty === "Medium"
-                          ? "bg-yellow-50 text-yellow-700 border-yellow-200"
-                          : "bg-red-50 text-red-700 border-red-200"
-                      }`}
-                    >
-                      {game.difficulty}
-                    </Badge>
-                  </div>
+                  <CardTitle>Condition Assessment Overview</CardTitle>
+                  <CardDescription>
+                    AI-based analysis results for all assessed conditions
+                  </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  {/* Stats Summary */}
-                  <div className="grid grid-cols-3 gap-2 mb-4">
-                    <div className="text-center p-2 bg-muted rounded-lg">
-                      <p className="text-xs text-muted-foreground">Plays</p>
-                      <p className="text-lg font-bold">{game.timesPlayed}</p>
-                    </div>
-                    <div className="text-center p-2 bg-muted rounded-lg">
-                      <p className="text-xs text-muted-foreground">Best</p>
-                      <p className="text-lg font-bold text-green-600">{game.bestScore}%</p>
-                    </div>
-                    <div className="text-center p-2 bg-muted rounded-lg">
-                      <p className="text-xs text-muted-foreground">Avg</p>
-                      <p className="text-lg font-bold">{game.avgScore}%</p>
-                    </div>
-                  </div>
+                  <div className="grid md:grid-cols-3 gap-4">
+                    {gameStats.map((game, idx) => {
+                      const conditionName = game.gameType === 'dyslexia' ? 'Dyslexia' :
+                        game.gameType === 'dyscalculia' ? 'Dyscalculia' :
+                          game.gameType === 'dysgraphia' ? 'Dysgraphia' : 'ADHD'
 
-                  {/* Progress Line Chart */}
-                  <ChartContainer config={chartConfig}>
-                    <LineChart 
-                      accessibilityLayer
-                      data={game.progressHistory}
-                      margin={{
-                        left: 12,
-                        right: 12,
-                      }}
-                    >
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                      <XAxis 
-                        dataKey="attempt" 
-                        tickLine={false} 
-                        axisLine={false}
-                        tickMargin={8}
-                        fontSize={10}
-                      />
-                      <YAxis domain={[60, 100]} fontSize={10} />
-                      <ChartTooltip
-                        cursor={false}
-                        content={<ChartTooltipContent hideLabel />}
-                      />
-                      <Line 
-                        dataKey="score"
-                        type="monotone"
-                        stroke={`hsl(var(--chart-${game.id}))`}
-                        strokeWidth={3}
-                        dot={{
-                          fill: `hsl(var(--chart-${game.id}))`,
-                          r: 4,
-                          strokeWidth: 2,
-                        }}
-                        activeDot={{
-                          r: 6,
-                        }}
-                      />
-                    </LineChart>
-                  </ChartContainer>
+                      const origConfidence = parseInt(String(game.confidence).replace('%', ''))
+                      const invertedConfidenceValue = isNaN(origConfidence) ? 0 : Math.max(0, Math.min(100, 100 - origConfidence))
+                      const displayConfidence = isNaN(origConfidence) ? 'N/A' : `${invertedConfidenceValue}%`
+                      const riskLevel = game.hasDisease ? 'High' : invertedConfidenceValue > 50 ? 'High' : 'Very Low'
+                      const riskColor = game.hasDisease ? 'text-red-600' : invertedConfidenceValue > 50 ? 'text-yellow-600' : 'text-green-600'
+                      const bgColor = game.hasDisease ? 'bg-red-50 border-red-200' : 'bg-green-50 border-green-200'
+
+                      return (
+                        <div key={idx} className={`rounded-lg p-4 border ${bgColor}`}>
+                          <div className="flex items-center justify-between mb-3">
+                            <h4 className="font-semibold">{conditionName}</h4>
+                            {game.hasDisease ? (
+                              <AlertCircle className="h-5 w-5 text-red-600" />
+                            ) : (
+                              <CheckCircle className="h-5 w-5 text-green-600" />
+                            )}
+                          </div>
+                          <div className="space-y-3">
+                            <div>
+                              <div className="flex justify-between text-sm mb-1">
+                                <span className="text-muted-foreground">Risk Level</span>
+                                <span className={`font-bold ${riskColor}`}>{riskLevel}</span>
+                              </div>
+                              <div className="flex justify-between text-sm mb-1">
+                                <span className="text-muted-foreground">Disease probability</span>
+                                <span className="font-bold">{displayConfidence}</span>
+                              </div>
+                              <Progress
+                                value={invertedConfidenceValue}
+                                className={`h-2 ${game.hasDisease ? '[&>div]:bg-red-600' : '[&>div]:bg-green-600'}`}
+                              />
+                              <div className="pt-2 border-t">
+                                <div className="text-xs text-muted-foreground mb-1">Performance</div>
+                                <div className="flex justify-between text-sm">
+                                  <span>Avg Score:</span>
+                                  <span className="font-semibold">{game.avgScore}%</span>
+                                </div>
+                                <div className="flex justify-between text-sm">
+                                  <span>Assessments:</span>
+                                  <span className="font-semibold">{game.timesPlayed}</span>
+                                </div>
+                              </div>
+                              {game.hasDisease && (
+                                <div className="pt-2 border-t">
+                                  <p className="text-xs font-medium text-red-700">
+                                    ⚠️ Recommendation: Consult with a healthcare professional
+                                  </p>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
                 </CardContent>
-                <CardFooter className="flex-col items-start gap-2 text-sm">
-                  <div className="flex items-center gap-2">
-                    <Badge variant={game.status === "completed" ? "default" : "secondary"} className="text-xs">
-                      {game.status === "completed" ? (
-                        <CheckCircle className="h-3 w-3 mr-1 inline" />
-                      ) : (
-                        <Clock className="h-3 w-3 mr-1 inline" />
-                      )}
-                      {game.status}
-                    </Badge>
-                    <span className="text-muted-foreground">•</span>
-                    <span className="text-muted-foreground">Improvement: {game.improvement}</span>
-                    <span className="text-muted-foreground">•</span>
-                    <span className="text-muted-foreground">Last: {game.lastPlayed}</span>
-                  </div>
-                </CardFooter>
               </Card>
-            ))}
-          </div>
 
-          {/* Game Summary Stats */}
-          <div className="grid md:grid-cols-3 gap-4 mt-6">
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-medium">Most Played Game</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-lg font-bold">
-                  {currentGames.reduce((prev, current) => 
-                    (prev.timesPlayed > current.timesPlayed) ? prev : current
-                  ).name}
-                </p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  {currentGames.reduce((prev, current) => 
-                    (prev.timesPlayed > current.timesPlayed) ? prev : current
-                  ).timesPlayed} times
-                </p>
-              </CardContent>
-            </Card>
-            
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-medium">Highest Scoring Game</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-lg font-bold">
-                  {currentGames.reduce((prev, current) => 
-                    (prev.bestScore > current.bestScore) ? prev : current
-                  ).name}
-                </p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  {currentGames.reduce((prev, current) => 
-                    (prev.bestScore > current.bestScore) ? prev : current
-                  ).bestScore}% best score
-                </p>
-              </CardContent>
-            </Card>
-            
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-medium">Total Assessment Time</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-lg font-bold">
-                  {Math.floor(currentGames.reduce((sum, game) => sum + game.totalTime, 0) / 60)}h{" "}
-                  {currentGames.reduce((sum, game) => sum + game.totalTime, 0) % 60}m
-                </p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Across {currentGames.length} assessment games
-                </p>
-              </CardContent>
-            </Card>
-          </div>
+              {/* Charts Section */}
+              <div className="grid md:grid-cols-2 gap-6 mb-6">
+                {/* Game Distribution by Type */}
+                {gamesByType.length > 0 && (
+                  <Card className="flex flex-col">
+                    <CardHeader className="items-center pb-0">
+                      <CardTitle>Assessment Distribution</CardTitle>
+                      <CardDescription>By assessment type</CardDescription>
+                    </CardHeader>
+                    <CardContent className="flex-1 pb-0">
+                      <ChartContainer
+                        config={chartConfig}
+                        className="mx-auto aspect-square max-h-[250px] [&_.recharts-pie-label-text]:fill-foreground"
+                      >
+                        <PieChart>
+                          <ChartTooltip content={<ChartTooltipContent hideLabel />} />
+                          <Pie
+                            data={gamesByType}
+                            dataKey="value"
+                            nameKey="name"
+                            label
+                            labelLine={false}
+                          >
+                            {gamesByType.map((entry, index) => (
+                              <Cell key={`cell-${index}`} fill={entry.fill} />
+                            ))}
+                          </Pie>
+                        </PieChart>
+                      </ChartContainer>
+                    </CardContent>
+                    <CardFooter className="flex-col gap-2 text-sm">
+                      <div className="flex items-center gap-2 font-medium leading-none">
+                        Total {totalGames} assessments completed
+                      </div>
+                    </CardFooter>
+                  </Card>
+                )}
+
+                {/* Game Scores Comparison */}
+                {gameStats.length > 0 && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Game Performance</CardTitle>
+                      <CardDescription>Average vs Best scores</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <ChartContainer config={chartConfig}>
+                        <BarChart
+                          accessibilityLayer
+                          data={gameStats}
+                          margin={{
+                            left: 12,
+                            right: 12,
+                          }}
+                        >
+                          <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                          <XAxis
+                            dataKey="name"
+                            tickLine={false}
+                            tickMargin={10}
+                            axisLine={false}
+                            fontSize={12}
+                          />
+                          <YAxis domain={[0, 100]} />
+                          <ChartTooltip
+                            cursor={false}
+                            content={<ChartTooltipContent />}
+                          />
+                          <Legend />
+                          <Bar dataKey="avgScore" name="Avg Score" fill="hsl(var(--chart-2))" radius={4} />
+                          <Bar dataKey="bestScore" name="Best Score" fill="hsl(var(--chart-1))" radius={4} />
+                        </BarChart>
+                      </ChartContainer>
+                    </CardContent>
+                  </Card>
+                )}
+              </div>
+
+              {/* Individual Game Details */}
+              <div className="mb-8">
+                <div className="flex items-center justify-between mb-6">
+                  <h2 className="text-2xl font-serif font-bold">Assessment Details</h2>
+                  <Badge variant="outline" className="text-sm">
+                    {gameStats.length} Game{gameStats.length !== 1 ? 's' : ''} Tracked
+                  </Badge>
+                </div>
+
+                <div className="grid md:grid-cols-2 gap-6">
+                  {gameStats.map((game, index) => {
+                    const gameTypeLabel = game.gameType === 'dyslexia' ? 'Dyslexia' :
+                      game.gameType === 'dyscalculia' ? 'Dyscalculia' :
+                        game.gameType === 'dysgraphia' ? 'Dysgraphia' : 'ADHD'
+
+                    // Get progress history for this game
+                    const progressHistory = game.assessments.map((assessment, idx) => {
+                      let score = 0
+                      if (game.gameType === 'dyslexia') {
+                        score = assessment.assessmentData.dyslexiaAssessment?.performance?.accuracy || 0
+                      } else if (game.gameType === 'dyscalculia') {
+                        const history = assessment.assessmentData.dyscalculiaAssessment?.progressHistory || []
+                        score = history.length > 0 ? history[history.length - 1].arithmeticAccuracy || 0 : 0
+                      } else if (game.gameType === 'dysgraphia') {
+                        score = assessment.assessmentData.dysgraphiaAssessment?.copyingPerformance?.accuracyRate || 0
+                      }
+                      return { attempt: (idx + 1).toString(), score: Math.round(score) }
+                    })
+
+                    const improvement = progressHistory.length > 1
+                      ? progressHistory[progressHistory.length - 1].score - progressHistory[0].score
+                      : 0
+
+                    const origConfidence = parseInt(String(game.confidence).replace('%', ''))
+                    const invertedConfidenceValue = isNaN(origConfidence) ? 0 : Math.max(0, Math.min(100, 100 - origConfidence))
+                    const displayConfidence = isNaN(origConfidence) ? 'N/A' : `${invertedConfidenceValue}%`
+
+                    return (
+                      <Card key={index}>
+                        <CardHeader>
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <CardTitle className="text-lg">{game.name}</CardTitle>
+                              <CardDescription className="mt-1">
+                                {gameTypeLabel} Assessment
+                              </CardDescription>
+                            </div>
+                            <Badge
+                              variant={game.hasDisease ? "destructive" : "outline"}
+                              className="text-xs"
+                            >
+                              {displayConfidence} confidence
+                            </Badge>
+                          </div>
+                        </CardHeader>
+                        <CardContent>
+                          {/* Stats Summary */}
+                          <div className="grid grid-cols-3 gap-2 mb-4">
+                            <div className="text-center p-2 bg-muted rounded-lg">
+                              <p className="text-xs text-muted-foreground">Plays</p>
+                              <p className="text-lg font-bold">{game.timesPlayed}</p>
+                            </div>
+                            <div className="text-center p-2 bg-muted rounded-lg">
+                              <p className="text-xs text-muted-foreground">Best</p>
+                              <p className="text-lg font-bold text-green-600">{game.bestScore}%</p>
+                            </div>
+                            <div className="text-center p-2 bg-muted rounded-lg">
+                              <p className="text-xs text-muted-foreground">Avg</p>
+                              <p className="text-lg font-bold">{game.avgScore}%</p>
+                            </div>
+                          </div>
+
+                          {/* Progress Line Chart */}
+                          {progressHistory.length > 0 && (
+                            <ChartContainer config={chartConfig}>
+                              <LineChart
+                                accessibilityLayer
+                                data={progressHistory}
+                                margin={{
+                                  left: 12,
+                                  right: 12,
+                                }}
+                              >
+                                <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                                <XAxis
+                                  dataKey="attempt"
+                                  tickLine={false}
+                                  axisLine={false}
+                                  tickMargin={8}
+                                  fontSize={10}
+                                />
+                                <YAxis domain={[0, 100]} fontSize={10} />
+                                <ChartTooltip
+                                  cursor={false}
+                                  content={<ChartTooltipContent hideLabel />}
+                                />
+                                <Line
+                                  dataKey="score"
+                                  type="monotone"
+                                  stroke={`hsl(var(--chart-${(index % 5) + 1}))`}
+                                  strokeWidth={3}
+                                  dot={{
+                                    fill: `hsl(var(--chart-${(index % 5) + 1}))`,
+                                    r: 4,
+                                    strokeWidth: 2,
+                                  }}
+                                  activeDot={{
+                                    r: 6,
+                                  }}
+                                />
+                              </LineChart>
+                            </ChartContainer>
+                          )}
+                        </CardContent>
+                        <CardFooter className="flex-col items-start gap-2 text-sm">
+                          <div className="flex items-center gap-2">
+                            <Badge
+                              variant={game.hasDisease ? "destructive" : "default"}
+                              className="text-xs"
+                            >
+                              {game.hasDisease ? (
+                                <>
+                                  <AlertCircle className="h-3 w-3 mr-1 inline" />
+                                  Needs Attention
+                                </>
+                              ) : (
+                                <>
+                                  <CheckCircle className="h-3 w-3 mr-1 inline" />
+                                  Looking Good
+                                </>
+                              )}
+                            </Badge>
+                            <span className="text-muted-foreground">•</span>
+                            <span className="text-muted-foreground">
+                              {improvement > 0 ? `+${improvement}%` : improvement < 0 ? `${improvement}%` : 'No change'}
+                            </span>
+                          </div>
+                        </CardFooter>
+                      </Card>
+                    )
+                  })}
+                </div>
+              </div>
+            </>
+          )}
         </div>
       </div>
     </div>

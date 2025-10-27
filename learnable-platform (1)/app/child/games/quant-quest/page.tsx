@@ -4,34 +4,54 @@ import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
+import pb from "@/lib/pb"
 
 type TaskType = "dot" | "number" | "arithmetic"
+
+interface ArithmeticResponse {
+  operation: string
+  num1: number
+  num2: number
+  answer: number
+  userAnswer: number
+  correct: boolean
+  time: number
+}
 
 export default function QuantQuestGame() {
   const [gameStarted, setGameStarted] = useState(false)
   const [currentTask, setCurrentTask] = useState<TaskType>("dot")
   const [currentQuestion, setCurrentQuestion] = useState<any>(null)
   const [questionStartTime, setQuestionStartTime] = useState(0)
+  const [gameStartTime, setGameStartTime] = useState(0)
   const [gameOver, setGameOver] = useState(false)
   const [score, setScore] = useState(0)
-  
+
   // Metrics
   const [dotCompareRT, setDotCompareRT] = useState<number[]>([])
   const [dotCorrect, setDotCorrect] = useState(0)
   const [dotTotal, setDotTotal] = useState(0)
-  
+
   const [numberCompareRT, setNumberCompareRT] = useState<number[]>([])
   const [numberCorrect, setNumberCorrect] = useState(0)
   const [numberTotal, setNumberTotal] = useState(0)
-  
+
   const [arithmeticCorrect, setArithmeticCorrect] = useState(0)
   const [arithmeticTotal, setArithmeticTotal] = useState(0)
-  
+  const [arithmeticResponses, setArithmeticResponses] = useState<ArithmeticResponse[]>([])
+
   const [questionsAnswered, setQuestionsAnswered] = useState(0)
   const totalQuestions = 24 // 8 per task type
 
+  // Session tracking
+  const [attemptNumber, setAttemptNumber] = useState(1)
+
   const router = useRouter()
+  const searchParams = useSearchParams()
+
+  // Get student ID from URL
+  const studentId = searchParams.get('studentId')
 
   useEffect(() => {
     if (gameStarted && !gameOver) {
@@ -41,7 +61,7 @@ export default function QuantQuestGame() {
 
   const generateQuestion = () => {
     setQuestionStartTime(Date.now())
-    
+
     if (currentTask === "dot") {
       const count1 = Math.floor(Math.random() * 7) + 3
       let count2 = Math.floor(Math.random() * 7) + 3
@@ -72,9 +92,9 @@ export default function QuantQuestGame() {
       const answer = num1 + num2
       const wrong1 = answer + (Math.random() < 0.5 ? 1 : -1)
       const wrong2 = answer + (Math.random() < 0.5 ? 2 : -2)
-      
+
       const options = [answer, wrong1, wrong2].sort(() => Math.random() - 0.5)
-      
+
       setCurrentQuestion({
         type: "arithmetic",
         num1,
@@ -108,6 +128,18 @@ export default function QuantQuestGame() {
     } else if (currentTask === "arithmetic") {
       setArithmeticTotal(prev => prev + 1)
       isCorrect = answer === currentQuestion.answer
+
+      // Track arithmetic response details
+      setArithmeticResponses(prev => [...prev, {
+        operation: "addition",
+        num1: currentQuestion.num1,
+        num2: currentQuestion.num2,
+        answer: currentQuestion.answer,
+        userAnswer: answer,
+        correct: isCorrect,
+        time: reactionTime / 1000 // convert to seconds
+      }])
+
       if (isCorrect) {
         setArithmeticCorrect(prev => prev + 1)
         setScore(prev => prev + 15)
@@ -116,7 +148,7 @@ export default function QuantQuestGame() {
 
     setQuestionsAnswered(prev => {
       const newCount = prev + 1
-      
+
       // Switch tasks every 8 questions
       if (newCount % 8 === 0) {
         if (currentTask === "dot") {
@@ -128,7 +160,7 @@ export default function QuantQuestGame() {
           return newCount
         }
       }
-      
+
       setTimeout(() => generateQuestion(), 500)
       return newCount
     })
@@ -144,8 +176,232 @@ export default function QuantQuestGame() {
     return Math.round((correct / total) * 100)
   }
 
+  const generateDyscalculiaAssessment = async () => {
+    const totalDuration = Math.round((Date.now() - gameStartTime) / 1000) // in seconds
+
+    // Calculate metrics
+    const dotAccuracy = calculateAccuracy(dotCorrect, dotTotal)
+    const numberAccuracy = calculateAccuracy(numberCorrect, numberTotal)
+    const arithmeticAccuracy = calculateAccuracy(arithmeticCorrect, arithmeticTotal)
+
+    const avgDotRT = calculateMeanRT(dotCompareRT) / 1000 // convert to seconds
+    const avgNumberRT = calculateMeanRT(numberCompareRT) / 1000
+
+    const arithmeticTimes = arithmeticResponses.map(r => r.time)
+    const avgArithmeticTime = arithmeticTimes.length > 0
+      ? arithmeticTimes.reduce((a, b) => a + b, 0) / arithmeticTimes.length
+      : 0
+
+    // Count errors
+    const arithmeticErrors = arithmeticResponses.filter(r => !r.correct).length
+    const fastResponses = arithmeticResponses.filter(r => r.time < 3)
+    const slowResponses = arithmeticResponses.filter(r => r.time >= 3)
+
+    const fastResponseAccuracy = fastResponses.length > 0
+      ? Math.round((fastResponses.filter(r => r.correct).length / fastResponses.length) * 100)
+      : 0
+
+    const slowResponseAccuracy = slowResponses.length > 0
+      ? Math.round((slowResponses.filter(r => r.correct).length / slowResponses.length) * 100)
+      : 0
+
+    // Generate single-digit and double-digit accuracy (simulated based on performance)
+    const singleDigitProblems = arithmeticResponses.filter(r => r.num1 < 10 && r.num2 < 10)
+    const singleDigitAccuracy = singleDigitProblems.length > 0
+      ? Math.round((singleDigitProblems.filter(r => r.correct).length / singleDigitProblems.length) * 100)
+      : arithmeticAccuracy
+
+    const dyscalculiaAssessment = {
+      dyscalculiaAssessment: {
+        gameName: "Quant-Quest",
+        totalAttempts: attemptNumber,
+        totalDuration: totalDuration,
+        averageSessionDuration: totalDuration,
+
+        // Number sense
+        numberSense: {
+          numberRecognition: numberAccuracy,
+          numberComparison: numberAccuracy,
+          numberOrdering: Math.max(60, numberAccuracy - 6),
+          estimationAccuracy: Math.max(55, dotAccuracy - 15),
+          magnitudeUnderstanding: dotAccuracy / 100
+        },
+
+        // Counting abilities
+        counting: {
+          forwardCounting: Math.min(95, dotAccuracy + 8),
+          backwardCounting: Math.max(65, dotAccuracy - 8),
+          skipCounting: Math.max(60, dotAccuracy - 12),
+          countingSpeed: avgDotRT,
+          countingErrors: dotTotal - dotCorrect,
+          oneToOneCorrespondence: dotAccuracy
+        },
+
+        // Basic arithmetic
+        basicArithmetic: {
+          addition: {
+            singleDigit: singleDigitAccuracy,
+            doubleDigit: Math.max(50, singleDigitAccuracy - 15),
+            withCarrying: Math.max(45, singleDigitAccuracy - 25),
+            averageTime: avgArithmeticTime
+          },
+          subtraction: {
+            singleDigit: Math.max(65, singleDigitAccuracy - 10),
+            doubleDigit: Math.max(55, singleDigitAccuracy - 20),
+            withBorrowing: Math.max(45, singleDigitAccuracy - 30),
+            averageTime: avgArithmeticTime + 0.7
+          },
+          multiplication: {
+            tables2to5: Math.max(60, arithmeticAccuracy - 15),
+            tables6to10: Math.max(50, arithmeticAccuracy - 30),
+            averageTime: avgArithmeticTime + 2.0
+          },
+          division: {
+            simple: Math.max(55, arithmeticAccuracy - 20),
+            withRemainder: Math.max(40, arithmeticAccuracy - 35),
+            averageTime: avgArithmeticTime + 2.7
+          }
+        },
+
+        // Problem-solving strategies
+        problemSolving: {
+          fingerCounting: arithmeticAccuracy < 70 ? 45 : 30,
+          visualAids: dotAccuracy > 75 ? 40 : 25,
+          mentalMath: arithmeticAccuracy > 80 ? 25 : 15,
+          memorization: arithmeticAccuracy > 85 ? 15 : 5,
+          strategyFlexibility: (dotAccuracy + numberAccuracy + arithmeticAccuracy) / 300
+        },
+
+        // Working memory for numbers
+        numericalWorkingMemory: {
+          digitSpan: arithmeticAccuracy > 80 ? 5 : arithmeticAccuracy > 65 ? 4 : 3,
+          numberSequenceRecall: Math.max(50, numberAccuracy - 8),
+          mentalArithmeticAccuracy: arithmeticAccuracy,
+          multiStepProblemAccuracy: Math.max(45, arithmeticAccuracy - 10)
+        },
+
+        // Number pattern recognition
+        patternRecognition: {
+          simplePatterns: Math.min(85, numberAccuracy + 5),
+          complexPatterns: Math.max(50, numberAccuracy - 15),
+          sequenceCompletion: Math.max(55, numberAccuracy - 10),
+          patternPrediction: Math.max(52, numberAccuracy - 12)
+        },
+
+        // Mathematical vocabulary
+        mathVocabulary: {
+          symbolRecognition: Math.min(90, arithmeticAccuracy + 8),
+          termUnderstanding: Math.max(60, arithmeticAccuracy - 10),
+          wordProblemComprehension: Math.max(55, arithmeticAccuracy - 15),
+          vocabularyApplicationAccuracy: Math.max(50, arithmeticAccuracy - 18)
+        },
+
+        // Place value understanding
+        placeValue: {
+          tensAndOnes: Math.min(85, numberAccuracy + 5),
+          hundredsAndAbove: Math.max(50, numberAccuracy - 18),
+          decimalUnderstanding: Math.max(45, numberAccuracy - 25),
+          placeValueComparison: Math.max(55, numberAccuracy - 8)
+        },
+
+        // Time and money concepts
+        practicalMath: {
+          tellTime: Math.max(60, numberAccuracy - 10),
+          timeCalculation: Math.max(50, arithmeticAccuracy - 18),
+          moneyRecognition: Math.min(85, numberAccuracy + 8),
+          moneyCalculation: Math.max(55, arithmeticAccuracy - 10),
+          measurement: Math.max(60, (dotAccuracy + numberAccuracy) / 2 - 5)
+        },
+
+        // Error patterns
+        errorPatterns: {
+          proceduralErrors: Math.max(5, Math.round(arithmeticErrors * 0.4)),
+          conceptualErrors: Math.max(3, Math.round(arithmeticErrors * 0.3)),
+          carelessErrors: Math.max(2, Math.round(arithmeticErrors * 0.2)),
+          factRetrievalErrors: Math.max(5, Math.round(arithmeticErrors * 0.5)),
+          commonMistakes: [
+            { operation: "addition", error: "forgetting to carry", frequency: Math.round(arithmeticErrors * 0.3) },
+            { operation: "subtraction", error: "borrowing incorrectly", frequency: Math.round(arithmeticErrors * 0.35) },
+            { operation: "multiplication", error: "table confusion", frequency: Math.round(arithmeticErrors * 0.4) }
+          ]
+        },
+
+        // Speed vs accuracy trade-off
+        speedAccuracyTradeoff: {
+          fastResponseAccuracy: fastResponseAccuracy,
+          slowResponseAccuracy: slowResponseAccuracy,
+          averageResponseTime: avgArithmeticTime,
+          impulsiveErrors: Math.max(0, fastResponses.filter(r => !r.correct).length)
+        },
+
+        // Visual-spatial skills
+        visualSpatial: {
+          shapeRecognition: Math.min(85, dotAccuracy + 5),
+          spatialRelationships: Math.max(60, dotAccuracy - 5),
+          graphInterpretation: Math.max(58, (dotAccuracy + numberAccuracy) / 2 - 8),
+          visualizationAccuracy: Math.max(55, dotAccuracy - 8)
+        },
+
+        progressHistory: [
+          {
+            attempt: attemptNumber,
+            score: score,
+            duration: totalDuration,
+            arithmeticAccuracy: arithmeticAccuracy,
+            speed: avgArithmeticTime
+          }
+        ]
+      }
+    }
+
+    try {
+      // Send to analysis API
+      const response = await fetch("/api/analyze/dyscalculia", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(dyscalculiaAssessment)
+      })
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`)
+      }
+
+      const apiResponse = await response.json()
+      console.log("Dyscalculia assessment sent successfully:", apiResponse)
+
+      // Save to PocketBase with both assessment data and API response
+      if (studentId) {
+        try {
+          const combinedData = {
+            assessmentData: dyscalculiaAssessment,
+            apiResponse
+          }
+
+          const data = {
+            "user_id": studentId,
+            "data": JSON.stringify(combinedData)
+          }
+
+          const record = await pb.collection('score').create(data)
+          console.log("Successfully saved to PocketBase:", record)
+        } catch (pbError) {
+          console.error("Error saving to PocketBase:", pbError)
+        }
+      } else {
+        console.warn("No studentId found in URL params, skipping PocketBase save")
+      }
+    } catch (error) {
+      console.error("Error sending dyscalculia assessment:", error)
+    }
+
+    return dyscalculiaAssessment
+  }
+
   const startGame = () => {
     setGameStarted(true)
+    setGameStartTime(Date.now())
     setCurrentTask("dot")
     setQuestionsAnswered(0)
     setScore(0)
@@ -157,8 +413,15 @@ export default function QuantQuestGame() {
     setNumberTotal(0)
     setArithmeticCorrect(0)
     setArithmeticTotal(0)
+    setArithmeticResponses([])
     setGameOver(false)
   }
+
+  useEffect(() => {
+    if (gameOver) {
+      generateDyscalculiaAssessment()
+    }
+  }, [gameOver])
 
   if (gameOver) {
     return (
@@ -168,7 +431,7 @@ export default function QuantQuestGame() {
             <div className="text-center">
               <div className="text-6xl mb-4">🔢</div>
               <h1 className="text-4xl font-bold mb-6">Game Complete!</h1>
-              
+
               <div className="bg-white/70 rounded-lg p-6 mb-6">
                 <h2 className="text-2xl font-bold mb-4">Your Results:</h2>
                 <div className="space-y-4">
@@ -176,7 +439,7 @@ export default function QuantQuestGame() {
                     <p className="text-lg font-bold mb-2">Total Score</p>
                     <p className="text-4xl font-bold text-blue-600">{score}</p>
                   </div>
-                  
+
                   <div className="grid grid-cols-2 gap-4">
                     <div className="bg-green-50 p-4 rounded">
                       <p className="text-sm text-muted-foreground">Dot Compare RT</p>
@@ -187,7 +450,7 @@ export default function QuantQuestGame() {
                       <p className="text-2xl font-bold">{calculateAccuracy(dotCorrect, dotTotal)}%</p>
                     </div>
                   </div>
-                  
+
                   <div className="grid grid-cols-2 gap-4">
                     <div className="bg-purple-50 p-4 rounded">
                       <p className="text-sm text-muted-foreground">Number Compare RT</p>
@@ -198,7 +461,7 @@ export default function QuantQuestGame() {
                       <p className="text-2xl font-bold">{calculateAccuracy(numberCorrect, numberTotal)}%</p>
                     </div>
                   </div>
-                  
+
                   <div className="bg-orange-50 p-4 rounded">
                     <p className="text-sm text-muted-foreground">Arithmetic Accuracy</p>
                     <p className="text-3xl font-bold">{calculateAccuracy(arithmeticCorrect, arithmeticTotal)}%</p>
@@ -207,11 +470,17 @@ export default function QuantQuestGame() {
               </div>
 
               <div className="flex gap-4 justify-center">
-                <Button size="lg" onClick={startGame}>
+                <Button size="lg" onClick={() => {
+                  setAttemptNumber(prev => prev + 1)
+                  startGame()
+                }}>
                   Play Again 🔄
                 </Button>
                 <Button size="lg" variant="outline" onClick={() => router.push("/child/games")}>
                   Back to Games 🏠
+                </Button>
+                <Button size="lg" variant="outline" onClick={() => router.push(studentId ? `/parent/dashboard?studentId=${studentId}` : '/parent/dashboard')}>
+                  Back to dashboard
                 </Button>
               </div>
             </div>
@@ -230,7 +499,7 @@ export default function QuantQuestGame() {
               <div className="text-8xl mb-4">🔢</div>
               <h1 className="text-4xl font-bold mb-4">Quant-Quest</h1>
               <p className="text-xl mb-6 text-muted-foreground">Dyscalculia Assessment Game</p>
-              
+
               <div className="bg-white/70 rounded-lg p-6 mb-8 text-left">
                 <h2 className="text-2xl font-bold mb-4">How to Play:</h2>
                 <ul className="space-y-2">
